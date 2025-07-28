@@ -200,7 +200,7 @@
     <section id="viewer" class="relative flex-1 bg-black overflow-auto flex items-center justify-center">
       <div id="screenWrapper" class="relative">
         <img id="screenshot" alt="Screenshot" class="select-none" />
-        <div id="overlayContainer" class="absolute inset-0 pointer-events-none"></div>
+        <div id="overlayContainer" class="absolute inset-0"></div>
       </div>
     </section>
   </main>
@@ -322,6 +322,7 @@ function renderOverlays() {
   xpToOverlay.clear();
   xpToElem.clear();
   if (!xmlDoc || !screenshotImg.complete) return;
+  
   // Get displayed image size and scale
   const wrapper = document.getElementById('screenWrapper');
   const naturalWidth = screenshotImg.naturalWidth;
@@ -329,47 +330,93 @@ function renderOverlays() {
   const wrapperWidth = wrapper.clientWidth;
   const wrapperHeight = wrapper.clientHeight;
   const scale = Math.min(wrapperWidth / naturalWidth, wrapperHeight / naturalHeight);
-  const nodes = [...xmlDoc.querySelectorAll('[bounds]')];
+  
+  // Get all elements with bounds and calculate their areas and depths
+  const nodes = [];
+  const allElements = xmlDoc.querySelectorAll('[bounds]');
+  
+  // First pass: collect all elements and their bounds
+  allElements.forEach(node => {
+    const bounds = node.getAttribute('bounds');
+    const [x1, y1, x2, y2] = bounds.match(/\d+/g).map(Number);
+    const area = (x2 - x1) * (y2 - y1);
+    const depth = getXP(node).split('/').length;
+    nodes.push({ 
+      node, 
+      area, 
+      depth, 
+      bounds: {x1, y1, x2, y2},
+      xp: getXP(node)
+    });
+  });
+  
+  // Function to check if element a contains element b
+  function contains(a, b) { 
+    return a.bounds.x1 <= b.bounds.x1 && 
+           a.bounds.y1 <= b.bounds.y1 && 
+           a.bounds.x2 >= b.bounds.x2 && 
+           a.bounds.y2 >= b.bounds.y2;
+  }
+  
+  // Function to calculate how many elements contain this one
+  function getContainmentLevel(node) { 
+    return nodes.filter(n => n !== node && contains(n, node)).length;
+  }
+  
+  // Sort by: 
+  // 1. Number of elements that contain this one (more contained = higher z-index)
+  // 2. Area (smaller first)
+  // 3. Depth in the tree (deeper first)
+  nodes.sort((a, b) => { 
+    const aContainers = getContainmentLevel(a); 
+    const bContainers = getContainmentLevel(b); 
+    
+    if (aContainers !== bContainers) { 
+      return aContainers - bContainers; 
+    }
+    
+    if (a.area !== b.area) { 
+      return a.area - b.area; 
+    }
+    
+    return b.depth - a.depth; 
+  });
+  
   elemCount.textContent = nodes.length;
   statusElems.classList.toggle('hidden', !nodes.length);
-  // Render from deepest to shallowest so deeper elements are on top
-  nodes.sort((a, b) => {
-    // Use classic getXP for depth
-    const da = getXP(a).split('/').length;
-    const db = getXP(b).split('/').length;
-    return da - db;
-  });
-  for (const n of nodes) {
-    const bounds = n.getAttribute('bounds');
-    const m = bounds.match(/\[(\d+),(\d+)\]\[(\d+),(\d+)\]/);
-    if (!m) continue;
-    const [, x1, y1, x2, y2] = m.map(Number);
-    if (x2 <= x1 || y2 <= y1) continue;
-    // Use classic getXP for overlay mapping
-    const xp = getXP(n);
-    const depth = xp.split('/').length;
-    const box = document.createElement('div');
-    box.className = 'element-box absolute';
-    Object.assign(box.style, {
-      left: `${x1 * scale}px`,
-      top: `${y1 * scale}px`,
-      width: `${(x2 - x1) * scale}px`,
-      height: `${(y2 - y1) * scale}px`,
-      zIndex: depth
-    });
-    box.dataset.xp = xp;
-    box.addEventListener('click', e => {
-      e.stopPropagation();
-      select(xp);
+  
+  // Create a z-index counter to ensure proper stacking
+  let zIndex = 1; 
+  
+  // Render all nodes in the calculated order
+  for (const {node, xp, bounds} of nodes) { 
+    const {x1, y1, x2, y2} = bounds; 
+    
+    const box = document.createElement('div'); 
+    box.className = 'element-box absolute'; 
+    
+    Object.assign(box.style, { 
+      left: `${x1 * scale}px`, 
+      top: `${y1 * scale}px`, 
+      width: `${(x2 - x1) * scale}px`, 
+      height: `${(y2 - y1) * scale}px`, 
+      zIndex: zIndex++ // Increment z-index for each element
+    }); 
+    
+    box.dataset.xp = xp; 
+    box.addEventListener('click', e => { 
+      e.stopPropagation(); 
+      select(xp); 
       // Scroll hierarchy view to selected tree element
-      const label = xpToTree.get(xp);
-      if (label) {
-        label.scrollIntoView({block: 'center', behavior: 'smooth'});
-      }
-    });
-    overlay.appendChild(box);
-    xpToOverlay.set(xp, box);
-    xpToElem.set(xp, n);
+      const label = xpToTree.get(xp); 
+      if (label) { 
+        label.scrollIntoView({block: 'center', behavior: 'smooth'}); 
+      } 
+    }); 
+    
+    overlay.appendChild(box); 
+    xpToOverlay.set(xp, box); 
+    xpToElem.set(xp, node); 
   }
 }
 
