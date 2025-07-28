@@ -146,15 +146,53 @@
       </div>
 
       <!-- Properties panel -->
-      <div class="flex flex-col">
-        <h2 class="font-semibold mb-1">Properties</h2>
-        <textarea id="propOutput" readonly class="w-full h-40 p-2 border rounded bg-white text-xs font-mono whitespace-pre"></textarea>
+      <div class="flex flex-col h-64">
+        <div class="flex justify-between items-center mb-1">
+          <h2 class="font-semibold">Properties</h2>
+          <div class="text-xs text-gray-500">Drag bottom to resize</div>
+        </div>
+        <div class="border rounded bg-white flex-1 flex flex-col overflow-hidden">
+          <div class="overflow-auto flex-1" id="propTable">
+            <table class="w-full text-xs">
+              <thead class="bg-gray-100 sticky top-0">
+                <tr>
+                  <th class="text-left p-1 border-b">Name</th>
+                  <th class="text-left p-1 border-b">Value</th>
+                  <th class="w-8 border-b"></th>
+                </tr>
+              </thead>
+              <tbody id="propOutput" class="font-mono"></tbody>
+            </table>
+          </div>
+          <div class="h-2 bg-gray-100 border-t cursor-row-resize hover:bg-blue-100" id="propResizeHandle"></div>
+        </div>
       </div>
 
       <!-- XPath -->
-      <div>
+      <div class="space-y-2">
         <h2 class="font-semibold mb-1">Selected XPath</h2>
-        <textarea id="xpathOutput" readonly class="w-full h-20 p-2 border rounded bg-white text-xs font-mono"></textarea>
+        <div>
+          <div class="text-xs text-gray-400 mb-1">Shortest Unique XPath</div>
+          <div class="relative">
+            <textarea id="xpathOutputShort" readonly class="w-full h-16 p-2 border rounded bg-white text-xs font-mono"></textarea>
+            <button onclick="copyToClipboard('xpathOutputShort')" class="absolute right-2 top-2 text-gray-500 hover:text-blue-600" title="Copy to clipboard">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div>
+          <div class="text-xs text-gray-400 mb-1">Full XPath</div>
+          <div class="relative">
+            <textarea id="xpathOutputFull" readonly class="w-full h-16 p-2 border rounded bg-white text-xs font-mono"></textarea>
+            <button onclick="copyToClipboard('xpathOutputFull')" class="absolute right-2 top-2 text-gray-500 hover:text-blue-600" title="Copy to clipboard">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+              </svg>
+            </button>
+          </div>
+        </div>
       </div>
     </aside>
 
@@ -186,6 +224,7 @@ let xmlDoc = null;
 const xpToOverlay = new Map();
 const xpToTree    = new Map();
 const xpToElem    = new Map();
+let currentElement = null;
 
 /* ===== Helpers ===== */
 let lastImgFileName = '';
@@ -337,50 +376,182 @@ function renderOverlays() {
 /* ===== XPath util ===== */
 function getXP(el){const seg=[];let cur=el;while(cur&&cur.nodeType===1){let i=1;let sib=cur.previousElementSibling;while(sib){if(sib.tagName===cur.tagName)i++;sib=sib.previousElementSibling;}seg.unshift(`${cur.tagName}[${i}]`);cur=cur.parentElement;}return '/'+seg.join('/');}
 
-function getXP2(el) {
-  // Try to use unique attributes for shortest XPath
+function getShortestUniqueXPath(el) {
   if (!el || el.nodeType !== 1) return '';
-  let seg = [];
-  let cur = el;
-  while (cur && cur.nodeType === 1) {
-    let id = cur.getAttribute('resource-id');
-    let desc = cur.getAttribute('content-desc');
-    let text = cur.getAttribute('text');
-    let tag = cur.tagName;
-    let attr = '';
+  
+  // Try to find the most specific unique selector
+  const paths = [];
+  let current = el;
+  
+  while (current && current.nodeType === 1) {
+    let tag = current.tagName;
+    let path = tag;
+    
+    // First, try to find a unique ID or resource-id
+    const id = current.getAttribute('resource-id') || current.getAttribute('id');
     if (id) {
-      attr = `[@resource-id='${id}']`;
-    } else if (desc) {
-      attr = `[@content-desc='${desc}']`;
-    } else if (text) {
-      attr = `[@text='${text}']`;
+      path = `${tag}[@resource-id='${id}']`;
+      paths.unshift(path);
+      break;
     }
-    // If unique among siblings, use it
-    if (attr) {
-      let siblings = cur.parentElement ? Array.from(cur.parentElement.children).filter(c => c.tagName === tag) : [];
-      let isUnique = siblings.filter(sib => sib !== cur && sib.getAttribute(attr.match(/@([\w-]+)='([^']+)'/)[1]) === attr.match(/'([^']+)'/)[1]).length === 0;
-      if (isUnique) {
-        seg.unshift(`${tag}${attr}`);
-        break;
+    
+    // Then try other unique attributes
+    const attrs = Array.from(current.attributes);
+    const uniqueAttr = attrs.find(attr => {
+      // Skip common attributes that might not be unique
+      if (['bounds', 'index', 'checkable', 'checked', 'clickable', 'enabled', 
+           'focusable', 'focused', 'scrollable', 'long-clickable', 'password',
+           'selected', 'class', 'package', 'content-desc', 'text', 'resource-id', 'id'].includes(attr.name)) {
+        return false;
       }
+      
+      // Only consider attributes with values
+      if (!attr.value || attr.value.trim() === '') return false;
+      
+      const selector = `${tag}[@${attr.name}='${escapeXPathString(attr.value)}']`;
+      try {
+        return document.evaluate(
+          `count(//${selector}) = 1`,
+          document,
+          null,
+          XPathResult.BOOLEAN_TYPE,
+          null
+        ).booleanValue;
+      } catch (e) {
+        return false;
+      }
+    });
+    
+    if (uniqueAttr) {
+      path = `${tag}[@${uniqueAttr.name}='${escapeXPathString(uniqueAttr.value)}']`;
+      paths.unshift(path);
+      break;
     }
-    // fallback to index
-    let i = 1;
-    let sib = cur.previousElementSibling;
-    while (sib) {
-      if (sib.tagName === tag) i++;
-      sib = sib.previousElementSibling;
+    
+    // Try content-desc and text as last resort
+    const contentDesc = current.getAttribute('content-desc');
+    const text = current.getAttribute('text');
+    
+    if (contentDesc) {
+      const selector = `${tag}[@content-desc='${escapeXPathString(contentDesc)}']`;
+      try {
+        if (document.evaluate(`count(//${selector}) = 1`, document, null, XPathResult.BOOLEAN_TYPE, null).booleanValue) {
+          paths.unshift(selector);
+          break;
+        }
+      } catch (e) {}
     }
-    seg.unshift(`${tag}[${i}]`);
-    cur = cur.parentElement;
+    
+    if (text) {
+      const selector = `${tag}[@text='${escapeXPathString(text)}']`;
+      try {
+        if (document.evaluate(`count(//${selector}) = 1`, document, null, XPathResult.BOOLEAN_TYPE, null).booleanValue) {
+          paths.unshift(selector);
+          break;
+        }
+      } catch (e) {}
+    }
+    
+    // If no unique attribute found, use index
+    let index = 1;
+    let sibling = current.previousElementSibling;
+    while (sibling) {
+      if (sibling.tagName === tag) index++;
+      sibling = sibling.previousElementSibling;
+    }
+    
+    paths.unshift(`${tag}[${index}]`);
+    current = current.parentElement;
   }
-  return '/' + seg.join('/');
+  
+  return '/' + paths.join('/');
+}
+
+// Helper function to escape XPath string literals
+function escapeXPathString(str) {
+  if (str === null || str === undefined) return '';
+  return String(str).replace(/'/g, '"');
+}
+
+// Keep the original getXP2 for backward compatibility
+function getXP2(el) {
+  return getShortestUniqueXPath(el);
+}
+
+function enhanceXPath(attrName, attrValue) {
+  if (!currentElement) return;
+  
+  // Get current shortest XPath
+  let xpath = document.getElementById('xpathOutputShort').value;
+  
+  // If the attribute is already in the XPath, don't add it again
+  if (xpath.includes(`@${attrName}=`)) {
+    return;
+  }
+  
+  // Add the attribute to the XPath
+  if (xpath.includes('@')) {
+    // If there are already attributes, add this one with AND
+    xpath = xpath.replace(/\]$/, ` and @${attrName}='${attrValue}']`);
+  } else {
+    // Otherwise, add the attribute condition
+    xpath = xpath.replace(/(\[.*?\])?$/, `[@${attrName}='${attrValue}']`);
+  }
+  
+  // Update the XPath display
+  document.getElementById('xpathOutputShort').value = xpath;
+  
+  // Highlight the updated XPath briefly
+  const xpathEl = document.getElementById('xpathOutputShort');
+  xpathEl.classList.add('bg-yellow-100');
+  setTimeout(() => xpathEl.classList.remove('bg-yellow-100'), 1000);
+}
+
+function copyToClipboard(elementId) {
+  const element = document.getElementById(elementId);
+  if (!element) return;
+  
+  element.select();
+  document.execCommand('copy');
+  
+  // Show feedback using a tooltip instead of placeholder
+  const tooltip = document.createElement('div');
+  tooltip.textContent = 'Copied!';
+  tooltip.className = 'absolute bg-black text-white text-xs px-2 py-1 rounded -top-8 right-0 whitespace-nowrap';
+  
+  const container = element.parentElement;
+  container.style.position = 'relative';
+  container.appendChild(tooltip);
+  
+  setTimeout(() => {
+    tooltip.remove();
+    element.blur();
+  }, 1000);
 }
 
 /* ===== Selection sync ===== */
-function clearSel(){document.querySelectorAll('.selected-box').forEach(b=>b.classList.remove('selected-box'));document.querySelectorAll('.selected-tree').forEach(l=>l.classList.remove('selected-tree'));propOutput.value='';}
+function clearSel(){
+  document.querySelectorAll('.selected-box').forEach(b=>b.classList.remove('selected-box'));
+  document.querySelectorAll('.selected-tree').forEach(l=>l.classList.remove('selected-tree'));
+  document.getElementById('propOutput').innerHTML = '';
+  document.getElementById('xpathOutputFull').value = '';
+  document.getElementById('xpathOutputShort').value = '';
+  currentElement = null;
+}
 function select(xp) {
   clearSel();
+  const element = xpToElem.get(xp);
+  if (!element) return;
+  
+  // Update selection in the tree view
+  const label = xpToTree.get(xp);
+  if (label) {
+    label.classList.add('selected-tree');
+    // Scroll the selected element into view in the hierarchy
+    label.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  
+  // Update the overlay box
   const box = xpToOverlay.get(xp);
   if (box) {
     box.classList.add('selected-box');
@@ -389,50 +560,130 @@ function select(xp) {
     const boxRect = box.getBoundingClientRect();
     const viewer = document.getElementById('viewer');
     // Only scroll if box is outside visible area
-    if (boxRect.top < overlayRect.top || boxRect.bottom > overlayRect.bottom || boxRect.left < overlayRect.left || boxRect.right > overlayRect.right) {
+    if (boxRect.top < overlayRect.top || boxRect.bottom > overlayRect.bottom || 
+        boxRect.left < overlayRect.left || boxRect.right > overlayRect.right) {
       // Center the box in the viewer
       const scrollX = boxRect.left + boxRect.width/2 - overlayRect.left - viewer.clientWidth/2;
       const scrollY = boxRect.top + boxRect.height/2 - overlayRect.top - viewer.clientHeight/2;
       viewer.scrollBy({left: scrollX, top: scrollY, behavior: 'smooth'});
     }
   }
-  const label = xpToTree.get(xp);
-  if (label) label.classList.add('selected-tree');
-  // Show both classic and shortest XPath
-  const el = xpToElem.get(xp);
-  xpathOutput.value = getXP2(el) + '\n\n(full: ' +  xp + ')';
-  if (el) {
-    // Show properties as a table with search buttons
-    let table = '<table class="w-full text-xs"><thead><tr><th class="text-left pr-2">Name</th><th class="text-left">Value</th><th></th></tr></thead><tbody>';
-    for (const a of el.attributes) {
-      table += `<tr><td class='pr-2 font-mono'>${a.name}</td><td class='font-mono'>${a.value}</td><td><button class='bg-blue-100 hover:bg-blue-300 text-xs px-2 py-1 rounded' onclick="window.searchByAttr('${a.name}','${a.value}')">🔍</button></td></tr>`;
-    }
-    table += '</tbody></table>';
-    propOutput.value = '';
-    propOutput.style.display = 'none';
-    // Insert table after textarea
-    let tbl = document.getElementById('propTable');
-    if (!tbl) {
-      tbl = document.createElement('div');
-      tbl.id = 'propTable';
-      tbl.className = 'w-full h-40 overflow-auto border rounded bg-white text-xs font-mono';
-      propOutput.parentNode.appendChild(tbl);
-    }
-    tbl.innerHTML = table;
-    tbl.style.display = '';
+  
+  // Update XPath outputs
+  currentElement = element;
+  const fullXPath = getXP(element);
+  const shortXPath = getShortestUniqueXPath(element);
+  
+  document.getElementById('xpathOutputFull').value = fullXPath;
+  document.getElementById('xpathOutputShort').value = shortXPath;
+  
+  // Update properties table
+  updatePropertiesTable(element);
+}
+
+function updatePropertiesTable(element) {
+  const propTable = document.getElementById('propOutput');
+  propTable.innerHTML = '';
+  
+  if (!element) return;
+  
+  // Add all attributes as properties
+  const attrs = element.attributes;
+  for (let i = 0; i < attrs.length; i++) {
+    const attr = attrs[i];
+    if (attr.name === 'bounds') continue; // Skip bounds as they're shown in the UI
+    
+    const row = document.createElement('tr');
+    row.className = 'hover:bg-gray-100 border-b';
+    
+    const nameCell = document.createElement('td');
+    nameCell.className = 'p-1 break-all';
+    nameCell.textContent = attr.name;
+    
+    const valueCell = document.createElement('td');
+    valueCell.className = 'p-1 break-all';
+    valueCell.textContent = attr.value || '';
+    
+    const actionCell = document.createElement('td');
+    actionCell.className = 'p-1 text-center';
+    
+    const enhanceBtn = document.createElement('button');
+    enhanceBtn.className = 'text-blue-500 hover:text-blue-700';
+    enhanceBtn.title = 'Add to XPath';
+    enhanceBtn.innerHTML = '🔍';
+    enhanceBtn.onclick = (e) => {
+      e.stopPropagation();
+      enhanceXPath(attr.name, attr.value);
+    };
+    
+    actionCell.appendChild(enhanceBtn);
+    row.appendChild(nameCell);
+    row.appendChild(valueCell);
+    row.appendChild(actionCell);
+    propTable.appendChild(row);
   }
 }
-window.searchByAttr = function(attr, value) {
-  // Find shortest XPath for attribute
-  if (!xmlDoc) return;
-  let node = xmlDoc.querySelector(`[${attr}='${value}']`);
-  if (node) {
-    let xp = getXP(node);
-    select(xp);
+  // Initialize properties table if it doesn't exist
+  let propTable = document.getElementById('propTable');
+  if (!propTable) {
+    propTable = document.createElement('div');
+    propTable.id = 'propTable';
+    propTable.className = 'w-full h-40 overflow-auto border rounded bg-white text-xs font-mono';
+    const propOutput = document.getElementById('propOutput');
+    propOutput.parentNode.insertBefore(propTable, propOutput.nextSibling);
   }
-};
+function searchByAttr(attr, value) {
+  if (!xmlDoc) return;
+  try {
+    const xp = `//*[@${attr}='${value.replace(/'/g, "&#39;")}']`;
+    const result = xmlDoc.evaluate(xp, xmlDoc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+    if (result.singleNodeValue) {
+      const xpath = getXP(result.singleNodeValue);
+      select(xpath);
+    }
+  } catch (e) {
+    console.error('Error in searchByAttr:', e);
+  }
+}
 
-/* ===== Sidebar drag resize ===== */
+/* ===== Resizable Elements ===== */
+// Properties panel resizing
+const propPanel = document.querySelector('#propTable').parentElement;
+const propResizeHandle = document.getElementById('propResizeHandle');
+let isResizingProps = false;
+let startY, startHeight;
+
+propResizeHandle.addEventListener('mousedown', (e) => {
+  isResizingProps = true;
+  startY = e.clientY;
+  startHeight = parseInt(document.defaultView.getComputedStyle(propPanel).height, 10);
+  document.documentElement.style.cursor = 'row-resize';
+  document.documentElement.style.userSelect = 'none';
+  e.preventDefault();
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!isResizingProps) return;
+  
+  const newHeight = startHeight + e.clientY - startY;
+  if (newHeight > 100) { // Minimum height
+    propPanel.style.height = `${newHeight}px`;
+    // Adjust the flex container to accommodate the new height
+    propPanel.parentElement.style.height = 'auto';
+  }
+  
+  e.preventDefault();
+});
+
+document.addEventListener('mouseup', () => {
+  if (isResizingProps) {
+    isResizingProps = false;
+    document.documentElement.style.cursor = '';
+    document.documentElement.style.userSelect = '';
+  }
+});
+
+// Sidebar drag resize
 const sidebar = document.getElementById('sidebar');
 const dragHandle = document.getElementById('sidebarDrag');
 let isDraggingSidebar = false;
