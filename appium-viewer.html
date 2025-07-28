@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Universal XML‑Bounds Viewer</title>
+  <!-- Tailwind for styling (demo) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Screenshot always fully visible (fits height & width) */
+    #screenWrapper,
+    #screenshot {
+      max-height: 100%;
+      max-width: 100%;
+      object-fit: contain;
+    }
+
+    /* Overlay boxes */
+    .element-box {
+      border: 2px solid rgba(16, 196, 16, 0.5);
+      background: rgba(16, 196, 16, 0.01); /* 1% transparency */
+      transition: background 120ms, border-color 120ms;
+      pointer-events: auto;
+    }
+    .element-box:hover {
+      border-color: rgba(0, 192, 255, 0.85);
+      background: rgba(0, 192, 255, 0.10);
+    }
+    .selected-box {
+      border-color: rgb(239 68 68) !important;
+      background: rgba(239, 68, 68, 0.16) !important;
+    }
+
+    /* Tree styles */
+    #treeContainer ul {
+      list-style: none;
+      margin: 0;
+      padding: 0 0 0 0.5rem; /* indent children */
+    }
+    .tree-row {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      line-height: 1.25rem;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .tree-row:hover span.label {
+      color: rgb(37 99 235);
+    }
+    .selected-tree {
+      color: rgb(239 68 68) !important;
+      font-weight: 600;
+    }
+
+    /* Resizable sidebar */
+    .resize-x {
+      resize: horizontal;
+      overflow: auto;
+    }
+
+    /* Resizable sidebar - drag handle */
+    .sidebar {
+      position: relative;
+      background: #1a202c;
+      color: #e5e7eb;
+      border-right: 2px solid #222;
+    }
+    .sidebar-drag {
+      position: absolute;
+      top: 0;
+      right: -5px;
+      width: 12px;
+      height: 100%;
+      cursor: ew-resize;
+      z-index: 10;
+      background: rgba(59,130,246,0.18); /* brighter and easier to grab */
+      border-radius: 3px;
+      transition: background 120ms;
+    }
+    .sidebar-drag:hover {
+      background: rgba(59,130,246,0.32);
+    }
+    /* Dark theme tweaks for sidebar */
+    #sidebar h2 { color: #fff; }
+    #sidebar .border { border-color: #333; }
+    #sidebar .bg-white { background: #222; color: #e5e7eb; }
+    #sidebar .text-xs { color: #cbd5e1; }
+    #sidebar .font-mono { color: #a3e635; }
+    #sidebar .rounded { border-radius: 0.375rem; }
+    #sidebar .border-gray-300 { border-color: #333; }
+    #sidebar .border { border-color: #333; }
+    #sidebar .bg-gray-100 { background: #1a202c; }
+    #sidebar .text-gray-600 { color: #a1a1aa; }
+    #sidebar .text-gray-400 { color: #a1a1aa; }
+    #sidebar .text-gray-500 { color: #a1a1aa; }
+    #sidebar .text-green-600 { color: #22c55e; }
+    #sidebar .text-red-600 { color: #ef4444; }
+    #sidebar .text-blue-600 { color: #2563eb; }
+    #sidebar .hover\:bg-blue-700:hover { background: #1e40af; }
+    #sidebar .bg-blue-600 { background: #2563eb; }
+    #sidebar .bg-blue-100 { background: #1e293b; color: #60a5fa; }
+    #sidebar .hover\:bg-blue-300:hover { background: #2563eb; color: #fff; }
+    /* Dark scrollbars */
+    #sidebar, #treeContainer, #propTable, #propOutput, #xpathOutput {
+      scrollbar-width: thin;
+      scrollbar-color: #333 #222;
+    }
+    #sidebar::-webkit-scrollbar, #treeContainer::-webkit-scrollbar, #propTable::-webkit-scrollbar, #propOutput::-webkit-scrollbar, #xpathOutput::-webkit-scrollbar {
+      width: 8px;
+      background: #222;
+    }
+    #sidebar::-webkit-scrollbar-thumb, #treeContainer::-webkit-scrollbar-thumb, #propTable::-webkit-scrollbar-thumb, #propOutput::-webkit-scrollbar-thumb, #xpathOutput::-webkit-scrollbar-thumb {
+      background: #333;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="flex flex-col h-screen font-sans">
+  <!-- Header -->
+  <header class="bg-gray-800 text-white p-4 flex items-center justify-between">
+    <h1 class="text-lg font-semibold">Appium / Generic XML Bounds Viewer</h1>
+    <div class="flex gap-2">
+      <label class="block"><input id="imgInput" type="file" accept="image/*" class="hidden" />
+        <span class="inline-block text-center cursor-pointer bg-blue-600 text-white py-2 px-3 rounded hover:bg-blue-700">Select Screenshot (JPG/PNG)</span></label>
+      <label class="block"><input id="xmlInput" type="file" accept="text/xml,.xml" class="hidden" />
+        <span class="inline-block text-center cursor-pointer bg-blue-600 text-white py-2 px-3 rounded hover:bg-blue-700">Select UI XML</span></label>
+    </div>
+  </header>
+
+  <main class="flex flex-1 overflow-hidden">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="sidebar bg-gray-900 text-gray-100 p-4 border-r border-gray-800 space-y-4 overflow-y-auto" style="width: 24rem; min-width: 16rem; max-width: 40vw;">
+      <div class="sidebar-drag" id="sidebarDrag"></div>
+      <!-- Status -->
+      <div class="space-y-1 text-xs">
+        <div id="statusImg" class="flex items-center gap-1 text-gray-600"><span>📄 Screenshot:</span><span data-state="empty" class="font-medium">Not loaded</span></div>
+        <div id="statusXml" class="flex items-center gap-1 text-gray-600"><span>🗂️ XML:</span><span data-state="empty" class="font-medium">Not loaded</span></div>
+        <div id="statusElements" class="flex items-center gap-1 text-gray-600 hidden"><span>🧩 Elements:</span><span id="elementCount" class="font-medium">0</span></div>
+      </div>
+
+      <!-- Hierarchy -->
+      <div class="flex flex-col">
+        <h2 class="font-semibold mb-1">Hierarchy</h2>
+        <div id="treeContainer" class="border rounded bg-white h-52 overflow-auto text-xs leading-5 py-1"></div>
+      </div>
+
+      <!-- Properties panel -->
+      <div class="flex flex-col">
+        <h2 class="font-semibold mb-1">Properties</h2>
+        <textarea id="propOutput" readonly class="w-full h-40 p-2 border rounded bg-white text-xs font-mono whitespace-pre"></textarea>
+      </div>
+
+      <!-- XPath -->
+      <div>
+        <h2 class="font-semibold mb-1">Selected XPath</h2>
+        <textarea id="xpathOutput" readonly class="w-full h-20 p-2 border rounded bg-white text-xs font-mono"></textarea>
+      </div>
+    </aside>
+
+    <!-- Viewer -->
+    <section id="viewer" class="relative flex-1 bg-black overflow-auto flex items-center justify-center">
+      <div id="screenWrapper" class="relative">
+        <img id="screenshot" alt="Screenshot" class="select-none" />
+        <div id="overlayContainer" class="absolute inset-0 pointer-events-none"></div>
+      </div>
+    </section>
+  </main>
+
+<script>
+/* ===== Element refs ===== */
+const imgInput      = document.getElementById('imgInput');
+const xmlInput      = document.getElementById('xmlInput');
+const screenshotImg = document.getElementById('screenshot');
+const overlay       = document.getElementById('overlayContainer');
+const dropZone      = document.getElementById('dropZone');
+const treeContainer = document.getElementById('treeContainer');
+const propOutput    = document.getElementById('propOutput');
+const xpathOutput   = document.getElementById('xpathOutput');
+const statusImg     = document.querySelector('#statusImg [data-state]');
+const statusXml     = document.querySelector('#statusXml [data-state]');
+const statusElems   = document.getElementById('statusElements');
+const elemCount     = document.getElementById('elementCount');
+
+let xmlDoc = null;
+const xpToOverlay = new Map();
+const xpToTree    = new Map();
+const xpToElem    = new Map();
+
+/* ===== Helpers ===== */
+let lastImgFileName = '';
+let lastXmlFileName = '';
+function setStatus(el, state, ok='Loaded ✔', fileName='') {
+  el.dataset.state = state;
+  let msg = state==='ok' ? ok : state==='error' ? 'Error' : 'Not loaded';
+  if (state==='ok' && fileName) msg += ` (${fileName})`;
+  el.textContent = msg;
+  el.classList.toggle('text-green-600', state==='ok');
+  el.classList.toggle('text-red-600',   state==='error');
+  el.classList.toggle('text-gray-600',  state!=='ok');
+}
+
+/* ===== Drag & Drop ===== */
+function processFiles(files){Array.from(files).forEach(f=>{if(f.type.startsWith('image/')) loadImage(f); else if(f.name.endsWith('.xml')) loadXml(f);} );}
+// Make whole screen a drop target
+['dragenter','dragover'].forEach(eType=>document.body.addEventListener(eType,e=>{e.preventDefault();document.body.classList.add('bg-gray-200');}));
+['dragleave','drop'].forEach(eType=>document.body.addEventListener(eType,e=>{e.preventDefault();if(eType==='drop') processFiles(e.dataTransfer.files);document.body.classList.remove('bg-gray-200');}));
+
+/* ===== File pickers ===== */
+document.querySelectorAll('#imgInput').forEach(input => {
+  input.addEventListener('change', e => {
+    if (e.target.files && e.target.files[0]) loadImage(e.target.files[0]);
+  });
+});
+document.querySelectorAll('#xmlInput').forEach(input => {
+  input.addEventListener('change', e => {
+    if (e.target.files && e.target.files[0]) loadXml(e.target.files[0]);
+  });
+});
+
+/* ===== Image ===== */
+function loadImage(file){
+  lastImgFileName = file.name;
+  const r=new FileReader();
+  r.onload=e=>screenshotImg.src=e.target.result;
+  r.readAsDataURL(file);
+  setStatus(statusImg,'ok','Loaded ✔', file.name);
+}
+screenshotImg.onload=()=>{resizeOverlay();renderOverlays();};
+window.addEventListener('resize',()=>{if(screenshotImg.src){resizeOverlay();renderOverlays();}});
+function resizeOverlay() {
+  // Get the wrapper and image natural size
+  const wrapper = document.getElementById('screenWrapper');
+  const naturalWidth = screenshotImg.naturalWidth;
+  const naturalHeight = screenshotImg.naturalHeight;
+  const wrapperWidth = wrapper.offsetWidth;
+  const wrapperHeight = wrapper.offsetHeight;
+  // Calculate scale to fit both width and height (object-fit: contain)
+  const scale = Math.min(wrapperWidth / naturalWidth, wrapperHeight / naturalHeight);
+  // Calculate displayed image size
+  const displayWidth = naturalWidth * scale;
+  const displayHeight = naturalHeight * scale;
+  // Set image size explicitly
+  screenshotImg.style.width = `${displayWidth}px`;
+  screenshotImg.style.height = `${displayHeight}px`;
+  // Set overlay size to match image
+  overlay.style.width = `${displayWidth}px`;
+  overlay.style.height = `${displayHeight}px`;
+}
+
+/* ===== XML ===== */
+function loadXml(file){
+  lastXmlFileName = file.name;
+  const r=new FileReader();
+  r.onload=e=>{
+    try{
+      xmlDoc=new DOMParser().parseFromString(e.target.result,'application/xml');
+      setStatus(statusXml,'ok','Loaded ✔', file.name);
+      buildTree();
+      renderOverlays();
+    }catch(err){
+      console.error(err);
+      setStatus(statusXml,'error');
+    }
+  };
+  r.readAsText(file);
+}
+
+/* ===== Tree ===== */
+function buildTree(){treeContainer.innerHTML='';xpToTree.clear();if(!xmlDoc) return;treeContainer.appendChild(branch(xmlDoc.documentElement));}
+function branch(el){const wrapper=document.createElement('div');const row=document.createElement('div');row.className='tree-row';const kids=[...el.children];const hasKids=kids.length>0;const caret=document.createElement('span');caret.textContent=hasKids?'▼':'•';caret.className=hasKids?'text-gray-500':'text-gray-400';row.appendChild(caret);
+const xp=getXP(el);
+const label=document.createElement('span');label.textContent=labelOf(el);label.className='label';label.dataset.xp=xp;row.appendChild(label);
+wrapper.appendChild(row);
+row.addEventListener('click',e=>{e.stopPropagation();select(xp);});
+if(hasKids){const ul=document.createElement('ul');kids.forEach(c=>ul.appendChild(branch(c)));wrapper.appendChild(ul);caret.addEventListener('click',e=>{e.stopPropagation();ul.classList.toggle('hidden');caret.textContent=ul.classList.contains('hidden')?'▶':'▼';});}
+xpToTree.set(xp,label);return wrapper;}
+function labelOf(el){return el.getAttribute('resource-id')||el.getAttribute('content-desc')||el.getAttribute('text')||el.tagName;}
+
+/* ===== Overlays ===== */
+function renderOverlays() {
+  overlay.innerHTML = '';
+  xpToOverlay.clear();
+  xpToElem.clear();
+  if (!xmlDoc || !screenshotImg.complete) return;
+  // Get displayed image size and scale
+  const wrapper = document.getElementById('screenWrapper');
+  const naturalWidth = screenshotImg.naturalWidth;
+  const naturalHeight = screenshotImg.naturalHeight;
+  const wrapperWidth = wrapper.clientWidth;
+  const wrapperHeight = wrapper.clientHeight;
+  const scale = Math.min(wrapperWidth / naturalWidth, wrapperHeight / naturalHeight);
+  const nodes = [...xmlDoc.querySelectorAll('[bounds]')];
+  elemCount.textContent = nodes.length;
+  statusElems.classList.toggle('hidden', !nodes.length);
+  // Render from deepest to shallowest so deeper elements are on top
+  nodes.sort((a, b) => {
+    // Use classic getXP for depth, not shortest
+    const da = getXP(a).split('/').length;
+    const db = getXP(b).split('/').length;
+    return da - db;
+  });
+  for (const n of nodes) {
+    const bounds = n.getAttribute('bounds');
+    const m = bounds.match(/\[(\d+),(\d+)\]\[(\d+),(\d+)\]/);
+    if (!m) continue;
+    const [, x1, y1, x2, y2] = m.map(Number);
+    if (x2 <= x1 || y2 <= y1) continue;
+    // Use classic getXP for overlay mapping
+    const xp = getXP(n);
+    const depth = xp.split('/').length;
+    const box = document.createElement('div');
+    box.className = 'element-box absolute';
+    Object.assign(box.style, {
+      left: `${x1 * scale}px`,
+      top: `${y1 * scale}px`,
+      width: `${(x2 - x1) * scale}px`,
+      height: `${(y2 - y1) * scale}px`,
+      zIndex: depth
+    });
+    box.dataset.xp = xp;
+    box.addEventListener('click', e => {
+      e.stopPropagation();
+      select(xp);
+      // Scroll hierarchy view to selected tree element
+      const label = xpToTree.get(xp);
+      if (label) {
+        label.scrollIntoView({block: 'center', behavior: 'smooth'});
+      }
+    });
+    overlay.appendChild(box);
+    xpToOverlay.set(xp, box);
+    xpToElem.set(xp, n);
+  }
+}
+
+/* ===== XPath util ===== */
+function getXP(el){const seg=[];let cur=el;while(cur&&cur.nodeType===1){let i=1;let sib=cur.previousElementSibling;while(sib){if(sib.tagName===cur.tagName)i++;sib=sib.previousElementSibling;}seg.unshift(`${cur.tagName}[${i}]`);cur=cur.parentElement;}return '/'+seg.join('/');}
+
+function getXP2(el) {
+  // Try to use unique attributes for shortest XPath
+  if (!el || el.nodeType !== 1) return '';
+  let seg = [];
+  let cur = el;
+  while (cur && cur.nodeType === 1) {
+    let id = cur.getAttribute('resource-id');
+    let desc = cur.getAttribute('content-desc');
+    let text = cur.getAttribute('text');
+    let tag = cur.tagName;
+    let attr = '';
+    if (id) {
+      attr = `[@resource-id='${id}']`;
+    } else if (desc) {
+      attr = `[@content-desc='${desc}']`;
+    } else if (text) {
+      attr = `[@text='${text}']`;
+    }
+    // If unique among siblings, use it
+    if (attr) {
+      let siblings = cur.parentElement ? Array.from(cur.parentElement.children).filter(c => c.tagName === tag) : [];
+      let isUnique = siblings.filter(sib => sib !== cur && sib.getAttribute(attr.match(/@([\w-]+)='([^']+)'/)[1]) === attr.match(/'([^']+)'/)[1]).length === 0;
+      if (isUnique) {
+        seg.unshift(`${tag}${attr}`);
+        break;
+      }
+    }
+    // fallback to index
+    let i = 1;
+    let sib = cur.previousElementSibling;
+    while (sib) {
+      if (sib.tagName === tag) i++;
+      sib = sib.previousElementSibling;
+    }
+    seg.unshift(`${tag}[${i}]`);
+    cur = cur.parentElement;
+  }
+  return '/' + seg.join('/');
+}
+
+/* ===== Selection sync ===== */
+function clearSel(){document.querySelectorAll('.selected-box').forEach(b=>b.classList.remove('selected-box'));document.querySelectorAll('.selected-tree').forEach(l=>l.classList.remove('selected-tree'));propOutput.value='';}
+function select(xp) {
+  clearSel();
+  const box = xpToOverlay.get(xp);
+  if (box) {
+    box.classList.add('selected-box');
+    // Scroll overlay box into view (centered)
+    const overlayRect = overlay.getBoundingClientRect();
+    const boxRect = box.getBoundingClientRect();
+    const viewer = document.getElementById('viewer');
+    // Only scroll if box is outside visible area
+    if (boxRect.top < overlayRect.top || boxRect.bottom > overlayRect.bottom || boxRect.left < overlayRect.left || boxRect.right > overlayRect.right) {
+      // Center the box in the viewer
+      const scrollX = boxRect.left + boxRect.width/2 - overlayRect.left - viewer.clientWidth/2;
+      const scrollY = boxRect.top + boxRect.height/2 - overlayRect.top - viewer.clientHeight/2;
+      viewer.scrollBy({left: scrollX, top: scrollY, behavior: 'smooth'});
+    }
+  }
+  const label = xpToTree.get(xp);
+  if (label) label.classList.add('selected-tree');
+  // Show both classic and shortest XPath
+  const el = xpToElem.get(xp);
+  xpathOutput.value = getXP2(el) + '\n\n(full: ' +  xp + ')';
+  if (el) {
+    // Show properties as a table with search buttons
+    let table = '<table class="w-full text-xs"><thead><tr><th class="text-left pr-2">Name</th><th class="text-left">Value</th><th></th></tr></thead><tbody>';
+    for (const a of el.attributes) {
+      table += `<tr><td class='pr-2 font-mono'>${a.name}</td><td class='font-mono'>${a.value}</td><td><button class='bg-blue-100 hover:bg-blue-300 text-xs px-2 py-1 rounded' onclick="window.searchByAttr('${a.name}','${a.value}')">🔍</button></td></tr>`;
+    }
+    table += '</tbody></table>';
+    propOutput.value = '';
+    propOutput.style.display = 'none';
+    // Insert table after textarea
+    let tbl = document.getElementById('propTable');
+    if (!tbl) {
+      tbl = document.createElement('div');
+      tbl.id = 'propTable';
+      tbl.className = 'w-full h-40 overflow-auto border rounded bg-white text-xs font-mono';
+      propOutput.parentNode.appendChild(tbl);
+    }
+    tbl.innerHTML = table;
+    tbl.style.display = '';
+  }
+}
+window.searchByAttr = function(attr, value) {
+  // Find shortest XPath for attribute
+  if (!xmlDoc) return;
+  let node = xmlDoc.querySelector(`[${attr}='${value}']`);
+  if (node) {
+    let xp = getXP(node);
+    select(xp);
+  }
+};
+
+/* ===== Sidebar drag resize ===== */
+const sidebar = document.getElementById('sidebar');
+const dragHandle = document.getElementById('sidebarDrag');
+let isDraggingSidebar = false;
+let sidebarWidth = sidebar.offsetWidth;
+function getScrollbarWidth() {
+  // Create a temporary div to measure scrollbar width
+  const outer = document.createElement('div');
+  outer.style.visibility = 'hidden';
+  outer.style.overflow = 'scroll';
+  outer.style.width = '100px';
+  document.body.appendChild(outer);
+  const inner = document.createElement('div');
+  inner.style.width = '100%';
+  outer.appendChild(inner);
+  const width = outer.offsetWidth - inner.offsetWidth;
+  outer.parentNode.removeChild(outer);
+  return width;
+}
+dragHandle.addEventListener('mousedown', function(e) {
+  e.preventDefault();
+  isDraggingSidebar = true;
+  document.body.style.cursor = 'ew-resize';
+  let startX = e.clientX;
+  let startWidth = sidebar.offsetWidth;
+  function onMove(ev) {
+    let scrollbarW = getScrollbarWidth();
+    let newWidth = Math.max(240, Math.min(window.innerWidth * 0.4, startWidth + (ev.clientX - startX)));
+    sidebar.style.width = newWidth + 'px';
+    sidebarWidth = newWidth;
+    dragHandle.style.right = (sidebar.scrollHeight > sidebar.clientHeight ? -5 - scrollbarW : -5) + 'px';
+    resizeOverlay(); // update image/overlay size on sidebar resize
+  }
+  function onUp() {
+    isDraggingSidebar = false;
+    document.body.style.cursor = '';
+    window.removeEventListener('mousemove', onMove);
+    window.removeEventListener('mouseup', onUp);
+    resizeOverlay(); // ensure overlay/image size is correct after drag
+  }
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+});
+// Make the entire right edge of sidebar draggable
+sidebar.addEventListener('mousemove', function(e) {
+  let scrollbarW = getScrollbarWidth();
+  let dragArea = sidebar.getBoundingClientRect().right + (sidebar.scrollHeight > sidebar.clientHeight ? scrollbarW : 0);
+  if (Math.abs(e.clientX - dragArea) < 12) {
+    sidebar.style.cursor = 'ew-resize';
+  } else if (!isDraggingSidebar) {
+    sidebar.style.cursor = '';
+  }
+});
+sidebar.addEventListener('mousedown', function(e) {
+  let scrollbarW = getScrollbarWidth();
+  let dragArea = sidebar.getBoundingClientRect().right + (sidebar.scrollHeight > sidebar.clientHeight ? scrollbarW : 0);
+  if (Math.abs(e.clientX - dragArea) < 12) {
+    dragHandle.dispatchEvent(new MouseEvent('mousedown', e));
+  }
+});
+// Responsive sidebar: keep width on grow/shrink
+window.addEventListener('resize', () => {
+  if (sidebarWidth) {
+    sidebar.style.width = sidebarWidth + 'px';
+    let scrollbarW = getScrollbarWidth();
+    dragHandle.style.right = (sidebar.scrollHeight > sidebar.clientHeight ? -5 - scrollbarW : -5) + 'px';
+  }
+  if(screenshotImg.src){
+    resizeOverlay();
+    renderOverlays();
+  }
+});
+</script>
+</body>
+</html>
