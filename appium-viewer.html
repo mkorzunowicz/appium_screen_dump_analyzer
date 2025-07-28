@@ -146,7 +146,7 @@
       </div>
 
       <!-- Properties panel -->
-      <div class="flex flex-col h-64">
+      <div id="propPanelWrapper" class="flex flex-col" style="height: 16rem; min-height: 8rem;">
         <div class="flex justify-between items-center mb-1">
           <h2 class="font-semibold">Properties</h2>
           <div class="text-xs text-gray-500">Drag bottom to resize</div>
@@ -174,7 +174,7 @@
         <div>
           <div class="text-xs text-gray-400 mb-1">Shortest Unique XPath</div>
           <div class="relative">
-            <textarea id="xpathOutputShort" readonly class="w-full h-16 p-2 border rounded bg-white text-xs font-mono"></textarea>
+            <textarea id="xpathOutputShort" readonly class="w-full h-16 p-2 border rounded bg-white text-xs font-mono resize-y"></textarea>
             <button onclick="copyToClipboard('xpathOutputShort')" class="absolute right-2 top-2 text-gray-500 hover:text-blue-600" title="Copy to clipboard">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
@@ -185,7 +185,7 @@
         <div>
           <div class="text-xs text-gray-400 mb-1">Full XPath</div>
           <div class="relative">
-            <textarea id="xpathOutputFull" readonly class="w-full h-16 p-2 border rounded bg-white text-xs font-mono"></textarea>
+            <textarea id="xpathOutputFull" readonly class="w-full h-16 p-2 border rounded bg-white text-xs font-mono resize-y"></textarea>
             <button onclick="copyToClipboard('xpathOutputFull')" class="absolute right-2 top-2 text-gray-500 hover:text-blue-600" title="Copy to clipboard">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
@@ -214,11 +214,11 @@ const overlay       = document.getElementById('overlayContainer');
 const dropZone      = document.getElementById('dropZone');
 const treeContainer = document.getElementById('treeContainer');
 const propOutput    = document.getElementById('propOutput');
-const xpathOutput   = document.getElementById('xpathOutput');
 const statusImg     = document.querySelector('#statusImg [data-state]');
 const statusXml     = document.querySelector('#statusXml [data-state]');
 const statusElems   = document.getElementById('statusElements');
 const elemCount     = document.getElementById('elementCount');
+const propWrapper   = document.getElementById('propPanelWrapper');  // new reference
 
 let xmlDoc = null;
 const xpToOverlay = new Map();
@@ -334,7 +334,7 @@ function renderOverlays() {
   statusElems.classList.toggle('hidden', !nodes.length);
   // Render from deepest to shallowest so deeper elements are on top
   nodes.sort((a, b) => {
-    // Use classic getXP for depth, not shortest
+    // Use classic getXP for depth
     const da = getXP(a).split('/').length;
     const db = getXP(b).split('/').length;
     return da - db;
@@ -473,11 +473,6 @@ function escapeXPathString(str) {
   return String(str).replace(/'/g, '"');
 }
 
-// Keep the original getXP2 for backward compatibility
-function getXP2(el) {
-  return getShortestUniqueXPath(el);
-}
-
 function enhanceXPath(attrName, attrValue) {
   if (!currentElement) return;
   
@@ -533,7 +528,7 @@ function copyToClipboard(elementId) {
 function clearSel(){
   document.querySelectorAll('.selected-box').forEach(b=>b.classList.remove('selected-box'));
   document.querySelectorAll('.selected-tree').forEach(l=>l.classList.remove('selected-tree'));
-  document.getElementById('propOutput').innerHTML = '';
+  propOutput.innerHTML = '';
   document.getElementById('xpathOutputFull').value = '';
   document.getElementById('xpathOutputShort').value = '';
   currentElement = null;
@@ -571,19 +566,13 @@ function select(xp) {
   
   // Update XPath outputs
   currentElement = element;
-  const fullXPath = getXP(element);
-  const shortXPath = getShortestUniqueXPath(element);
-  
-  document.getElementById('xpathOutputFull').value = fullXPath;
-  document.getElementById('xpathOutputShort').value = shortXPath;
-  
-  // Update properties table
+  document.getElementById('xpathOutputFull').value  = getXP(element);
+  document.getElementById('xpathOutputShort').value = getShortestUniqueXPath(element);
   updatePropertiesTable(element);
 }
 
 function updatePropertiesTable(element) {
-  const propTable = document.getElementById('propOutput');
-  propTable.innerHTML = '';
+  propOutput.innerHTML = '';
   
   if (!element) return;
   
@@ -620,7 +609,7 @@ function updatePropertiesTable(element) {
     row.appendChild(nameCell);
     row.appendChild(valueCell);
     row.appendChild(actionCell);
-    propTable.appendChild(row);
+    propOutput.appendChild(row);
   }
 }
   // Initialize properties table if it doesn't exist
@@ -629,7 +618,6 @@ function updatePropertiesTable(element) {
     propTable = document.createElement('div');
     propTable.id = 'propTable';
     propTable.className = 'w-full h-40 overflow-auto border rounded bg-white text-xs font-mono';
-    const propOutput = document.getElementById('propOutput');
     propOutput.parentNode.insertBefore(propTable, propOutput.nextSibling);
   }
 function searchByAttr(attr, value) {
@@ -647,8 +635,7 @@ function searchByAttr(attr, value) {
 }
 
 /* ===== Resizable Elements ===== */
-// Properties panel resizing
-const propPanel = document.querySelector('#propTable').parentElement;
+// Properties panel vertical resizing (matches textarea behaviour)
 const propResizeHandle = document.getElementById('propResizeHandle');
 let isResizingProps = false;
 let startY, startHeight;
@@ -656,7 +643,7 @@ let startY, startHeight;
 propResizeHandle.addEventListener('mousedown', (e) => {
   isResizingProps = true;
   startY = e.clientY;
-  startHeight = parseInt(document.defaultView.getComputedStyle(propPanel).height, 10);
+  startHeight = propWrapper.offsetHeight;
   document.documentElement.style.cursor = 'row-resize';
   document.documentElement.style.userSelect = 'none';
   e.preventDefault();
@@ -664,14 +651,10 @@ propResizeHandle.addEventListener('mousedown', (e) => {
 
 document.addEventListener('mousemove', (e) => {
   if (!isResizingProps) return;
-  
   const newHeight = startHeight + e.clientY - startY;
-  if (newHeight > 100) { // Minimum height
-    propPanel.style.height = `${newHeight}px`;
-    // Adjust the flex container to accommodate the new height
-    propPanel.parentElement.style.height = 'auto';
+  if (newHeight > 80) { // Minimum height (similar to textareas)
+    propWrapper.style.height = `${newHeight}px`;
   }
-  
   e.preventDefault();
 });
 
