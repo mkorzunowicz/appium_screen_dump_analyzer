@@ -19,7 +19,7 @@
     .element-box {
       border: 2px solid rgba(16, 196, 16, 0.5);
       background: rgba(16, 196, 16, 0.01); /* 1% transparency */
-      transition: background 120ms, border-color 120ms;
+      transition: all 0.2s ease;
       pointer-events: auto;
     }
     .element-box:hover {
@@ -29,6 +29,19 @@
     .selected-box {
       border-color: rgb(239 68 68) !important;
       background: rgba(239, 68, 68, 0.16) !important;
+      z-index: 90 !important;
+    }
+    /* XPath match highlighting */
+    .xpath-match {
+      border: 2px solid rgba(34, 211, 238, 0.8) !important;
+      background: rgba(34, 211, 238, 0.2) !important;
+      z-index: 80 !important;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.4); }
+      70% { box-shadow: 0 0 0 6px rgba(34, 211, 238, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0); }
     }
 
     /* Tree styles */
@@ -172,25 +185,45 @@
       <div class="space-y-2">
         <h2 class="font-semibold mb-1">Selected XPath</h2>
         <div>
-          <div class="text-xs text-gray-400 mb-1">Shortest Unique XPath</div>
-          <div class="relative">
-            <textarea id="xpathOutputShort" readonly class="w-full h-16 p-2 border rounded bg-white text-xs font-mono resize-y"></textarea>
-            <button onclick="copyToClipboard('xpathOutputShort')" class="absolute right-2 top-2 text-gray-500 hover:text-blue-600" title="Copy to clipboard">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-              </svg>
-            </button>
+          <div class="text-xs text-gray-400 mb-1">XPath Selector</div>
+          <div class="flex flex-col gap-2 mb-4">
+            <div class="flex items-center gap-2">
+              <select id="xpathSelector" class="flex-1 p-1.5 border rounded text-xs bg-gray-700 text-gray-100 border-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" onchange="updateXPathDisplay()">
+                <option value="" class="bg-gray-800">Select XPath option...</option>
+              </select>
+              <button onclick="copySelectedXPath()" class="p-1.5 bg-gray-600 rounded hover:bg-gray-500 text-gray-200" title="Copy XPath to clipboard">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                </svg>
+              </button>
+            </div>
+            <div class="relative">
+              <textarea id="xpathDisplay" readonly rows="3" class="w-full p-2 border rounded text-xs font-mono bg-gray-700 text-gray-100 border-gray-600 resize-y min-h-[60px] focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="Selected XPath will appear here"></textarea>
+              <button onclick="copyXPathDisplay()" class="absolute right-1 top-1 p-1 text-gray-400 hover:text-blue-400" title="Copy XPath">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                </svg>
+              </button>
+            </div>
           </div>
-        </div>
-        <div>
-          <div class="text-xs text-gray-400 mb-1">Full XPath</div>
-          <div class="relative">
-            <textarea id="xpathOutputFull" readonly class="w-full h-16 p-2 border rounded bg-white text-xs font-mono resize-y"></textarea>
-            <button onclick="copyToClipboard('xpathOutputFull')" class="absolute right-2 top-2 text-gray-500 hover:text-blue-600" title="Copy to clipboard">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-              </svg>
-            </button>
+          
+          <!-- XPath Tester -->
+          <div class="mt-4">
+            <h3 class="font-semibold text-sm mb-2">XPath Tester</h3>
+            <div class="relative">
+              <div class="flex items-center gap-2 mb-2">
+                <input type="text" id="xpathTesterInput" placeholder="Enter XPath to test" class="flex-1 p-1.5 border rounded text-xs bg-gray-700 text-gray-100 border-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
+                <button onclick="testXPath()" class="p-1.5 bg-blue-600 rounded hover:bg-blue-700 text-white text-xs">
+                  Test XPath
+                </button>
+                <button onclick="clearXPathTest()" class="p-1.5 bg-gray-600 rounded hover:bg-gray-500 text-white text-xs">
+                  Clear
+                </button>
+              </div>
+              <div id="xpathTestResults" class="text-xs text-gray-400 mb-2">
+                <span id="xpathMatchCount">0</span> elements matched
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -395,13 +428,20 @@ function renderOverlays() {
     const box = document.createElement('div'); 
     box.className = 'element-box absolute'; 
     
+    const isSelected = currentElement && getXP(currentElement) === xp;
+    
     Object.assign(box.style, { 
       left: `${x1 * scale}px`, 
       top: `${y1 * scale}px`, 
       width: `${(x2 - x1) * scale}px`, 
       height: `${(y2 - y1) * scale}px`, 
-      zIndex: zIndex++ // Increment z-index for each element
+      zIndex: zIndex++, // Increment z-index for each element
+      pointerEvents: isSelected ? 'none' : 'auto' // Disable pointer events for selected element
     }); 
+    
+    if (isSelected) {
+      box.classList.add('selected-box');
+    }
     
     box.dataset.xp = xp; 
     box.addEventListener('click', e => { 
@@ -421,7 +461,406 @@ function renderOverlays() {
 }
 
 /* ===== XPath util ===== */
-function getXP(el){const seg=[];let cur=el;while(cur&&cur.nodeType===1){let i=1;let sib=cur.previousElementSibling;while(sib){if(sib.tagName===cur.tagName)i++;sib=sib.previousElementSibling;}seg.unshift(`${cur.tagName}[${i}]`);cur=cur.parentElement;}return '/'+seg.join('/');}
+function getXP(el) {
+  const seg = [];
+  let cur = el;
+  while (cur && cur.nodeType === 1) {
+    let i = 1;
+    let sib = cur.previousElementSibling;
+    while (sib) {
+      if (sib.tagName === cur.tagName) i++;
+      sib = sib.previousElementSibling;
+    }
+    seg.unshift(`${cur.tagName}[${i}]`);
+    cur = cur.parentElement;
+  }
+  return '/' + seg.join('/');
+}
+
+// Check if an XPath returns exactly one element
+function isXPathUnique(xpath) {
+  try {
+    const result = document.evaluate(
+      `count(${xpath})`,
+      xmlDoc,
+      null,
+      XPathResult.NUMBER_TYPE,
+      null
+    );
+    return result.numberValue === 1;
+  } catch (e) {
+    console.warn('Error checking XPath uniqueness:', e);
+    return false;
+  }
+}
+
+// Generate multiple unique XPaths for an element with priority on resource-id, text, content-desc
+function generateXPathOptions(element) {
+  if (!element) return [];
+  
+  const options = [];
+  const addedXPaths = new Set();
+  
+  // Helper to add XPath if unique
+  function addXPathIfUnique(xpath, type, priority) {
+    if (!xpath || addedXPaths.has(xpath) || !isXPathUnique(xpath)) return false;
+    
+    options.push({
+      type: type,
+      value: xpath,
+      priority: priority
+    });
+    addedXPaths.add(xpath);
+    return true;
+  }
+  
+  // 1. Try resource-id (highest priority)
+  const resourceId = element.getAttribute('resource-id');
+  if (resourceId) {
+    const xpath = `//${element.tagName}[@resource-id='${escapeXPathString(resourceId)}']`;
+    addXPathIfUnique(xpath, 'Resource ID', 1);
+  }
+  
+  // 2. Try text content
+  const text = element.getAttribute('text');
+  if (text && text.trim() !== '') {
+    const xpath = `//${element.tagName}[@text='${escapeXPathString(text)}']`;
+    addXPathIfUnique(xpath, 'Text', 2);
+  }
+  
+  // 3. Try content description
+  const contentDesc = element.getAttribute('content-desc');
+  if (contentDesc) {
+    const xpath = `//${element.tagName}[@content-desc='${escapeXPathString(contentDesc)}']`;
+    addXPathIfUnique(xpath, 'Content Description', 3);
+  }
+  
+  // 4. Try other unique attributes
+  const attrs = element.attributes;
+  for (let i = 0; i < attrs.length; i++) {
+    const attr = attrs[i];
+    const name = attr.name;
+    
+    // Skip common non-unique attributes
+    if (['resource-id', 'text', 'content-desc', 'class', 'package', 'checkable', 
+         'checked', 'clickable', 'enabled', 'focusable', 'focused', 'scrollable', 
+         'long-clickable', 'password', 'selected', 'bounds', 'index'].includes(name)) {
+      continue;
+    }
+    
+    const value = attr.value;
+    if (value && value.trim() !== '') {
+      const xpath = `//${element.tagName}[@${name}='${escapeXPathString(value)}']`;
+      addXPathIfUnique(xpath, `@${name}`, 4);
+    }
+  }
+  
+  // 5. Add full XPath as fallback
+  const fullXPath = getXP(element);
+  if (!addedXPaths.has(fullXPath)) {
+    options.push({
+      type: 'Full XPath',
+      value: fullXPath,
+      priority: 100
+    });
+    addedXPaths.add(fullXPath);
+  }
+  
+  // Sort by priority (lower number = higher priority)
+  options.sort((a, b) => a.priority - b.priority);
+  
+  // Limit to 3 best options
+  return options.slice(0, 3);
+}
+
+function getXPathByUniqueAttribute(element) {
+  const attrs = Array.from(element.attributes);
+  const uniqueAttr = attrs.find(attr => {
+    if (!attr.value || attr.value.trim() === '') return false;
+    if (['bounds', 'index', 'checkable', 'checked', 'clickable', 'enabled', 
+         'focusable', 'focused', 'scrollable', 'long-clickable', 'password',
+         'selected', 'class', 'package'].includes(attr.name)) {
+      return false;
+    }
+    
+    const selector = `${element.tagName}[@${attr.name}='${escapeXPathString(attr.value)}']`;
+    try {
+      return document.evaluate(
+        `count(//${selector}) = 1`,
+        document,
+        null,
+        XPathResult.BOOLEAN_TYPE,
+        null
+      ).booleanValue;
+    } catch (e) {
+      return false;
+    }
+  });
+  
+  if (uniqueAttr) {
+    return `//${element.tagName}[@${uniqueAttr.name}='${escapeXPathString(uniqueAttr.value)}']`;
+  }
+  return null;
+}
+
+function getXPathByContent(element) {
+  const contentDesc = element.getAttribute('content-desc');
+  const text = element.getAttribute('text');
+  
+  if (contentDesc) {
+    const selector = `//${element.tagName}[@content-desc='${escapeXPathString(contentDesc)}']`;
+    try {
+      if (document.evaluate(`count(${selector}) = 1`, document, null, XPathResult.BOOLEAN_TYPE, null).booleanValue) {
+        return selector;
+      }
+    } catch (e) {}
+  }
+  
+  if (text) {
+    const selector = `//${element.tagName}[@text='${escapeXPathString(text)}']`;
+    try {
+      if (document.evaluate(`count(${selector}) = 1`, document, null, XPathResult.BOOLEAN_TYPE, null).booleanValue) {
+        return selector;
+      }
+    } catch (e) {}
+  }
+  
+  return null;
+}
+
+function getAlternativeXPath(element) {
+  // Try to find a parent with an ID or unique attribute
+  let current = element;
+  let levels = 0;
+  const maxLevels = 3; // Limit the depth to prevent too long XPaths
+  
+  while (current && current.nodeType === 1 && levels < maxLevels) {
+    const id = current.getAttribute('resource-id') || current.getAttribute('id');
+    if (id) {
+      return `//${current.tagName}[@resource-id='${id}']` + 
+             (levels > 0 ? `//${element.tagName}` : '');
+    }
+    
+    const uniqueAttr = Array.from(current.attributes).find(attr => {
+      if (!attr.value || attr.value.trim() === '') return false;
+      return !['bounds', 'index', 'checkable', 'checked', 'clickable', 'enabled', 
+               'focusable', 'focused', 'scrollable', 'long-clickable', 'password',
+               'selected', 'class', 'package', 'content-desc', 'text', 'resource-id', 'id'].includes(attr.name);
+    });
+    
+    if (uniqueAttr) {
+      return `//${current.tagName}[@${uniqueAttr.name}='${escapeXPathString(uniqueAttr.value)}']` + 
+             (levels > 0 ? `//${element.tagName}` : '');
+    }
+    
+    current = current.parentElement;
+    levels++;
+  }
+  
+  return null;
+}
+
+// Copy the currently selected XPath to clipboard
+function copySelectedXPath() {
+  const selector = document.getElementById('xpathSelector');
+  const xpath = selector.value;
+  if (xpath) {
+    navigator.clipboard.writeText(xpath).then(() => {
+      // Show tooltip or feedback
+      const button = document.querySelector('#xpathSelector + div + button');
+      const originalTitle = button.getAttribute('title');
+      button.setAttribute('title', 'Copied!');
+      setTimeout(() => {
+        button.setAttribute('title', originalTitle);
+      }, 2000);
+    });
+  }
+}
+
+
+// Update the XPath selector dropdown with new options
+function updateXPathSelector(element) {
+  const selector = document.getElementById('xpathSelector');
+  const xpOptions = generateXPathOptions(element);
+  
+  // Clear existing options
+  selector.innerHTML = '';
+  
+  // Add default option
+  const defaultOption = document.createElement('option');
+  defaultOption.value = '';
+  defaultOption.textContent = 'Select XPath option...';
+  selector.appendChild(defaultOption);
+  
+  // Add generated options
+  xpOptions.forEach(opt => {
+    const option = document.createElement('option');
+    option.value = opt.value;
+    option.textContent = `${opt.type} (${opt.value.length} chars)`;
+    option.dataset.type = opt.type;
+    option.dataset.xpath = opt.value; // Store full XPath in data attribute
+    selector.appendChild(option);
+  });
+  
+  // Select the first option by default if available
+  if (xpOptions.length > 0) {
+    selector.selectedIndex = 1; // Skip the default option
+    updateXPathDisplay();
+  }
+}
+
+// Update the XPath display input with the currently selected XPath
+function updateXPathDisplay() {
+  const selector = document.getElementById('xpathSelector');
+  const display = document.getElementById('xpathDisplay');
+  
+  if (selector.selectedIndex > 0) {
+    const selectedOption = selector.options[selector.selectedIndex];
+    const fullXPath = selectedOption.dataset.xpath || selectedOption.value;
+    display.value = fullXPath;
+  } else {
+    display.value = '';
+  }
+}
+
+// Copy the currently displayed XPath to clipboard
+function copyXPathDisplay() {
+  const display = document.getElementById('xpathDisplay');
+  if (display.value) {
+    navigator.clipboard.writeText(display.value).then(() => {
+      const button = event.currentTarget;
+      const originalTitle = button.getAttribute('title');
+      button.setAttribute('title', 'Copied!');
+      button.classList.remove('text-gray-400');
+      button.classList.add('text-green-500');
+      
+      setTimeout(() => {
+        button.setAttribute('title', originalTitle);
+        button.classList.remove('text-green-500');
+        button.classList.add('text-gray-400');
+      }, 2000);
+    });
+  }
+}
+
+// Copy the selected XPath to clipboard
+function copySelectedXPath() {
+  const display = document.getElementById('xpathDisplay');
+  if (display.value) {
+    navigator.clipboard.writeText(display.value).then(() => {
+      const button = document.querySelector('#xpathSelector + button');
+      if (button) {
+        const originalTitle = button.getAttribute('title');
+        button.setAttribute('title', 'Copied!');
+        
+        // Create a temporary element to show the copied tooltip
+        const tooltip = document.createElement('div');
+        tooltip.className = 'absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs px-2 py-1 rounded';
+        tooltip.textContent = 'Copied!';
+        button.parentNode.appendChild(tooltip);
+        
+        setTimeout(() => {
+          button.setAttribute('title', originalTitle);
+          if (tooltip.parentNode) {
+            tooltip.parentNode.removeChild(tooltip);
+          }
+        }, 1000);
+      }
+    });
+  }
+}
+
+// Test an XPath expression and highlight matching elements
+function testXPath() {
+  // Clear previous test results but keep the input value
+  const xpathInput = document.getElementById('xpathTesterInput');
+  const xpath = xpathInput.value.trim();
+  
+  if (!xpath) {
+    showStatus('Please enter an XPath expression to test', 'error');
+    return;
+  }
+  
+  // Clear only the highlights, not the input
+  clearXPathTest();
+  
+  try {
+    // Find all matching elements
+    const result = document.evaluate(
+      xpath,
+      xmlDoc,
+      null,
+      XPathResult.ORDERED_NODE_SNAPSHOT_TYPE,
+      null
+    );
+    
+    const count = result.snapshotLength;
+    const matchCountElement = document.getElementById('xpathMatchCount');
+    matchCountElement.textContent = count;
+    
+    if (count === 0) {
+      showStatus('No elements found matching the XPath', 'warning');
+      return;
+    }
+    
+    // Store the XPath that was tested
+    xpathInput.dataset.lastTestedXPath = xpath;
+    
+    // Highlight all matching elements
+    const overlay = document.getElementById('overlayContainer');
+    const matches = [];
+    
+    for (let i = 0; i < count; i++) {
+      const element = result.snapshotItem(i);
+      if (!element) continue;
+      
+      const elementXPath = getXP(element);
+      if (!elementXPath) continue;
+      
+      const box = xpToOverlay.get(elementXPath);
+      if (box) {
+        // Store the match for later reference
+        matches.push({
+          element: element,
+          xpath: elementXPath,
+          box: box
+        });
+      }
+    }
+    
+    // Now highlight all valid matches
+    matches.forEach((match, index) => {
+      match.box.classList.add('xpath-match');
+      
+      // Scroll the first match into view
+      if (index === 0) {
+        match.box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    });
+    
+    const statusMessage = `Found ${matches.length} matching element${matches.length !== 1 ? 's' : ''}`;
+    showStatus(statusMessage, 'success');
+    
+  } catch (e) {
+    console.error('XPath error:', e);
+    showStatus(`XPath error: ${e.message}`, 'error');
+    document.getElementById('xpathMatchCount').textContent = '0';
+  }
+}
+
+// Clear XPath test highlights
+function clearXPathTest() {
+  // Remove all xpath-match highlights
+  document.querySelectorAll('.xpath-match').forEach(el => {
+    el.classList.remove('xpath-match');
+  });
+  
+  // Reset match count
+  document.getElementById('xpathMatchCount').textContent = '0';
+  
+  // Note: We don't clear the input value here anymore
+  // to allow for multiple tests of the same XPath
+}
 
 function getShortestUniqueXPath(el) {
   if (!el || el.nodeType !== 1) return '';
@@ -523,30 +962,65 @@ function escapeXPathString(str) {
 function enhanceXPath(attrName, attrValue) {
   if (!currentElement) return;
   
-  // Get current shortest XPath
-  let xpath = document.getElementById('xpathOutputShort').value;
+  // Get the current XPath from the display or tester input
+  let currentXPath = document.getElementById('xpathDisplay').value.trim();
   
-  // If the attribute is already in the XPath, don't add it again
-  if (xpath.includes(`@${attrName}=`)) {
-    return;
+  // If there's no current XPath in display, check the tester input
+  if (!currentXPath) {
+    currentXPath = document.getElementById('xpathTesterInput').value.trim();
   }
   
-  // Add the attribute to the XPath
-  if (xpath.includes('@')) {
-    // If there are already attributes, add this one with AND
-    xpath = xpath.replace(/\]$/, ` and @${attrName}='${attrValue}']`);
+  // If still no XPath, use the full XPath of the current element
+  if (!currentXPath) {
+    currentXPath = getXP(currentElement);
+  }
+  
+  // Create a new XPath by appending the condition
+  let newXPath;
+  const escapedValue = escapeXPathString(attrValue);
+  
+  // Check if the XPath already has conditions
+  const hasExistingConditions = currentXPath.includes('[') && currentXPath.endsWith(']');
+  
+  if (hasExistingConditions) {
+    // Check if this exact attribute condition already exists
+    const attrPattern = new RegExp(`@${attrName}=['"]${escapedValue}['"]`);
+    if (currentXPath.match(attrPattern)) {
+      showStatus(`@${attrName}='${attrValue}' already exists in XPath`, 'info');
+      return;
+    }
+    
+    // Insert before the closing bracket
+    newXPath = currentXPath.replace(']', ` and @${attrName}='${escapedValue}']`);
   } else {
-    // Otherwise, add the attribute condition
-    xpath = xpath.replace(/(\[.*?\])?$/, `[@${attrName}='${attrValue}']`);
+    // Add new condition
+    newXPath = `${currentXPath}[@${attrName}='${escapedValue}']`;
   }
   
   // Update the XPath display
-  document.getElementById('xpathOutputShort').value = xpath;
+  const xpathDisplay = document.getElementById('xpathDisplay');
+  xpathDisplay.value = newXPath;
   
-  // Highlight the updated XPath briefly
-  const xpathEl = document.getElementById('xpathOutputShort');
-  xpathEl.classList.add('bg-yellow-100');
-  setTimeout(() => xpathEl.classList.remove('bg-yellow-100'), 1000);
+  // Also update the tester input
+  document.getElementById('xpathTesterInput').value = newXPath;
+  
+  // Update the selector dropdown
+  updateXPathSelectorWithCustomXPath(currentElement, newXPath, `By ${attrName}`);
+  
+  // Select the new XPath in the dropdown
+  const xpathSelector = document.getElementById('xpathSelector');
+  for (let i = 0; i < xpathSelector.options.length; i++) {
+    if (xpathSelector.options[i].value === newXPath) {
+      xpathSelector.selectedIndex = i;
+      break;
+    }
+  }
+  
+  // Show success message
+  showStatus(`Added @${attrName}='${attrValue}' to XPath`, 'success');
+  
+  // Test the new XPath
+  testXPath();
 }
 
 function copyToClipboard(elementId) {
@@ -573,100 +1047,219 @@ function copyToClipboard(elementId) {
 
 /* ===== Selection sync ===== */
 function clearSel(){
-  document.querySelectorAll('.selected-box').forEach(b=>b.classList.remove('selected-box'));
-  document.querySelectorAll('.selected-tree').forEach(l=>l.classList.remove('selected-tree'));
-  propOutput.innerHTML = '';
-  document.getElementById('xpathOutputFull').value = '';
-  document.getElementById('xpathOutputShort').value = '';
+  document.querySelectorAll('.selected-box').forEach(b => b.classList.remove('selected-box'));
+  document.querySelectorAll('.selected-tree').forEach(l => l.classList.remove('selected-tree'));
+  
+  // Clear properties table
+  const propTable = document.getElementById('propTable');
+  if (propTable) {
+    propTable.innerHTML = '';
+  }
+  
+  // Clear XPath selector
+  const xpathSelector = document.getElementById('xpathSelector');
+  if (xpathSelector) {
+    xpathSelector.innerHTML = '';
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Select XPath option...';
+    xpathSelector.appendChild(defaultOption);
+  }
+  
+  // Clear the current element and refresh overlays
   currentElement = null;
+  if (overlay) {
+    renderOverlays();
+  }
 }
 function select(xp) {
   clearSel();
   const element = xpToElem.get(xp);
   if (!element) return;
   
+  // Store the selected element
+  currentElement = element;
+  
   // Update selection in the tree view
   const label = xpToTree.get(xp);
   if (label) {
     label.classList.add('selected-tree');
-    // Scroll the selected element into view in the hierarchy
     label.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
   
-  // Update the overlay box
+  // Re-render overlays to update pointer events
+  renderOverlays();
+  
+  // Update the overlay box and scroll it into view
   const box = xpToOverlay.get(xp);
   if (box) {
-    box.classList.add('selected-box');
-    // Scroll overlay box into view (centered)
     const overlayRect = overlay.getBoundingClientRect();
     const boxRect = box.getBoundingClientRect();
     const viewer = document.getElementById('viewer');
-    // Only scroll if box is outside visible area
     if (boxRect.top < overlayRect.top || boxRect.bottom > overlayRect.bottom || 
         boxRect.left < overlayRect.left || boxRect.right > overlayRect.right) {
-      // Center the box in the viewer
       const scrollX = boxRect.left + boxRect.width/2 - overlayRect.left - viewer.clientWidth/2;
       const scrollY = boxRect.top + boxRect.height/2 - overlayRect.top - viewer.clientHeight/2;
       viewer.scrollBy({left: scrollX, top: scrollY, behavior: 'smooth'});
     }
   }
   
-  // Update XPath outputs
   currentElement = element;
-  document.getElementById('xpathOutputFull').value  = getXP(element);
-  document.getElementById('xpathOutputShort').value = getShortestUniqueXPath(element);
+  
+  // Update the XPath selector with new options
+  updateXPathSelector(element);
+  
+  // Update properties table
   updatePropertiesTable(element);
 }
 
 function updatePropertiesTable(element) {
-  propOutput.innerHTML = '';
-  
-  if (!element) return;
-  
-  // Add all attributes as properties
-  const attrs = element.attributes;
-  for (let i = 0; i < attrs.length; i++) {
-    const attr = attrs[i];
-    if (attr.name === 'bounds') continue; // Skip bounds as they're shown in the UI
-    
-    const row = document.createElement('tr');
-    row.className = 'hover:bg-gray-100 border-b';
-    
-    const nameCell = document.createElement('td');
-    nameCell.className = 'p-1 break-all';
-    nameCell.textContent = attr.name;
-    
-    const valueCell = document.createElement('td');
-    valueCell.className = 'p-1 break-all';
-    valueCell.textContent = attr.value || '';
-    
-    const actionCell = document.createElement('td');
-    actionCell.className = 'p-1 text-center';
-    
-    const enhanceBtn = document.createElement('button');
-    enhanceBtn.className = 'text-blue-500 hover:text-blue-700';
-    enhanceBtn.title = 'Add to XPath';
-    enhanceBtn.innerHTML = '🔍';
-    enhanceBtn.onclick = (e) => {
-      e.stopPropagation();
-      enhanceXPath(attr.name, attr.value);
-    };
-    
-    actionCell.appendChild(enhanceBtn);
-    row.appendChild(nameCell);
-    row.appendChild(valueCell);
-    row.appendChild(actionCell);
-    propOutput.appendChild(row);
-  }
-}
   // Initialize properties table if it doesn't exist
   let propTable = document.getElementById('propTable');
   if (!propTable) {
     propTable = document.createElement('div');
     propTable.id = 'propTable';
-    propTable.className = 'w-full h-40 overflow-auto border rounded bg-white text-xs font-mono';
-    propOutput.parentNode.insertBefore(propTable, propOutput.nextSibling);
+    propOutput.appendChild(propTable);
   }
+  
+  // Clear existing properties
+  propTable.innerHTML = '';
+  
+  // Add all attributes as properties
+  const attrs = element.attributes;
+  for (let i = 0; i < attrs.length; i++) {
+    const attr = attrs[i];
+    const attrName = attr.name;
+    const attrValue = attr.value;
+    
+    // Skip empty or internal attributes
+    if (!attrName || !attrValue || attrName.startsWith('_') || 
+        ['bounds', 'index'].includes(attrName)) {
+      continue;
+    }
+    
+    const propRow = document.createElement('div');
+    propRow.className = 'flex items-center py-1 border-b border-gray-200';
+    
+    const propName = document.createElement('div');
+    propName.className = 'w-1/3 text-xs text-gray-600 font-mono';
+    propName.textContent = attrName;
+    
+    const propValue = document.createElement('div');
+    propValue.className = 'w-2/3 text-xs font-mono truncate';
+    propValue.textContent = attrValue;
+    
+    const propActions = document.createElement('div');
+    propActions.className = 'flex items-center ml-2';
+    
+    // Add magnifying glass button to enhance XPath with this attribute
+    const magnifyBtn = document.createElement('button');
+    magnifyBtn.className = 'text-gray-400 hover:text-blue-600 p-1';
+    magnifyBtn.title = 'Enhance XPath with this attribute';
+    magnifyBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>';
+    magnifyBtn.onclick = (e) => {
+      e.stopPropagation();
+      enhanceXPath(attrName, attrValue);
+    };
+    
+    // Add copy button
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'text-gray-400 hover:text-blue-600 p-1';
+    copyBtn.title = 'Copy to clipboard';
+    copyBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>';
+    copyBtn.onclick = (e) => {
+      e.stopPropagation();
+      navigator.clipboard.writeText(attrValue).then(() => {
+        const originalTitle = copyBtn.getAttribute('title');
+        copyBtn.setAttribute('title', 'Copied!');
+        setTimeout(() => {
+          copyBtn.setAttribute('title', originalTitle);
+        }, 2000);
+      });
+    };
+    
+    propActions.appendChild(magnifyBtn);
+    propActions.appendChild(copyBtn);
+    
+    propRow.appendChild(propName);
+    propRow.appendChild(propValue);
+    propRow.appendChild(propActions);
+    
+    propTable.appendChild(propRow);
+  }
+  
+  // Add a row for the element's XPath
+  const xpathRow = document.createElement('div');
+  xpathRow.className = 'flex items-center py-1 border-b border-gray-200';
+  
+  const xpathLabel = document.createElement('div');
+  xpathLabel.className = 'w-1/3 text-xs text-gray-600 font-mono';
+  xpathLabel.textContent = 'xpath';
+  
+  const xpathValue = document.createElement('div');
+  xpathValue.className = 'w-2/3 text-xs font-mono truncate';
+  xpathValue.textContent = getXP(element);
+  
+  const xpathActions = document.createElement('div');
+  xpathActions.className = 'flex items-center ml-2';
+  
+  const xpathCopyBtn = document.createElement('button');
+  xpathCopyBtn.className = 'text-gray-400 hover:text-blue-600 p-1';
+  xpathCopyBtn.title = 'Copy to clipboard';
+  xpathCopyBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>';
+  xpathCopyBtn.onclick = (e) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(getXP(element)).then(() => {
+      const originalTitle = xpathCopyBtn.getAttribute('title');
+      xpathCopyBtn.setAttribute('title', 'Copied!');
+      setTimeout(() => {
+        xpathCopyBtn.setAttribute('title', originalTitle);
+      }, 2000);
+    });
+  };
+  
+  xpathActions.appendChild(xpathCopyBtn);
+  
+  xpathRow.appendChild(xpathLabel);
+  xpathRow.appendChild(xpathValue);
+  xpathRow.appendChild(xpathActions);
+  
+  propTable.appendChild(xpathRow);
+}
+
+// Helper function to update XPath selector with a custom XPath
+function updateXPathSelectorWithCustomXPath(element, customXPath, label) {
+  const selector = document.getElementById('xpathSelector');
+  const xpOptions = generateXPathOptions(element);
+  
+  // Clear existing options
+  selector.innerHTML = '';
+  
+  // Add default option
+  const defaultOption = document.createElement('option');
+  defaultOption.value = '';
+  defaultOption.textContent = 'Select XPath option...';
+  selector.appendChild(defaultOption);
+  
+  // Add custom XPath as first option
+  const customOption = document.createElement('option');
+  customOption.value = customXPath;
+  customOption.textContent = label || 'Custom XPath';
+  customOption.selected = true;
+  selector.appendChild(customOption);
+  
+  // Add other options but avoid duplicates
+  xpOptions.forEach(opt => {
+    if (opt.value !== customXPath) {
+      const option = document.createElement('option');
+      option.value = opt.value;
+      option.textContent = opt.label;
+      option.dataset.type = opt.type;
+      selector.appendChild(option);
+    }
+  });
+}
+
 function searchByAttr(attr, value) {
   if (!xmlDoc) return;
   try {
