@@ -35,8 +35,8 @@
     }
     /* XPath match highlighting */
     .xpath-match {
-      border: 2px solid rgba(34, 211, 238, 0.8) !important;
-      background: rgba(34, 211, 238, 0.2) !important;
+      border: 2px solid rgba(24, 203, 8, 0.899) !important;
+      background: rgba(22, 184, 54, 0.419) !important;
       z-index: 80 !important;
       animation: pulse 1.5s infinite;
     }
@@ -51,19 +51,30 @@
       min-width: 100%;
       display: inline-block;
     }
-    .tree-row {
+    /* Tree row styling */
+    .pl > .flex {
       display: flex;
       align-items: center;
       gap: 0.25rem;
       line-height: 1.25rem;
       cursor: pointer;
       white-space: nowrap;
+      padding: 1px 4px;
+      color: #e5e7eb;
+      border-radius: 4px;
     }
-    .tree-row:hover span.label {
-      color: rgb(37 99 235);
+    
+    .pl > .flex:hover {
+      background-color: rgba(255, 255, 255, 0.05);
     }
-    .selected-tree {
-      color: rgb(239 68 68) !important;
+    
+    .pl > .flex.selected-tree {
+      color: #ef4444 !important;
+      background-color: rgba(239, 68, 68, 0.15) !important;
+    }
+    
+    .pl > .flex.selected-tree .text-gray-200 {
+      color: #ef4444 !important;
       font-weight: 600;
     }
 
@@ -1088,6 +1099,32 @@ function getShortestUniqueXPath(el) {
   return '/' + paths.join('/');
 }
 
+// Helper function to show status messages
+function showStatus(message, type = 'info') {
+  // Create status element if it doesn't exist
+  let statusEl = document.getElementById('statusMessage');
+  if (!statusEl) {
+    statusEl = document.createElement('div');
+    statusEl.id = 'statusMessage';
+    statusEl.className = 'fixed bottom-4 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-md text-white text-sm font-medium z-50 transition-opacity duration-300';
+    document.body.appendChild(statusEl);
+  }
+  
+  // Set message and style based on type
+  statusEl.textContent = message;
+  statusEl.className = `fixed bottom-4 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-md text-white text-sm font-medium z-50 transition-opacity duration-300 ${
+    type === 'error' ? 'bg-red-600' : 
+    type === 'success' ? 'bg-green-600' : 
+    'bg-blue-600'
+  }`;
+  
+  // Show and then hide after delay
+  statusEl.style.opacity = '1';
+  setTimeout(() => {
+    statusEl.style.opacity = '0';
+  }, 3000);
+}
+
 // Helper function to escape XPath string literals
 function escapeXPathString(str) {
   if (str === null || str === undefined) return '';
@@ -1222,9 +1259,16 @@ function select(xp) {
     document.querySelectorAll('.selected-tree').forEach(el => {
       el.classList.remove('selected-tree');
     });
+    
     // Add selection to the current element
-    label.classList.add('selected-tree');
-    label.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    const row = label.closest('.flex');
+    if (row) {
+      // Add the selected class
+      row.classList.add('selected-tree');
+      
+      // Scroll into view
+      row.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    }
   }
   
   // Re-render overlays to update pointer events
