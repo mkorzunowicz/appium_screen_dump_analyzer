@@ -1131,7 +1131,7 @@ function escapeXPathString(str) {
   return String(str).replace(/'/g, '"');
 }
 
-function enhanceXPath(attrName, attrValue) {
+function enhanceXPath(attrName, attrValue, buttonElement) {
   if (!currentElement) return;
   
   // Get the current XPath from the display or tester input
@@ -1147,26 +1147,108 @@ function enhanceXPath(attrName, attrValue) {
     currentXPath = getXP(currentElement);
   }
   
-  // Create a new XPath by appending the condition
-  let newXPath;
   const escapedValue = escapeXPathString(attrValue);
+  const attrCondition = `@${attrName}='${escapedValue}'`;
+  let newXPath = currentXPath;
+  let isRemoving = false;
   
-  // Check if the XPath already has conditions
-  const hasExistingConditions = currentXPath.includes('[') && currentXPath.endsWith(']');
-  
-  if (hasExistingConditions) {
-    // Check if this exact attribute condition already exists
-    const attrPattern = new RegExp(`@${attrName}=['"]${escapedValue}['"]`);
-    if (currentXPath.match(attrPattern)) {
-      showStatus(`@${attrName}='${attrValue}' already exists in XPath`, 'info');
-      return;
+  // First, check if this is a class node that needs to be converted to wildcard
+  if (attrName === 'class') {
+    // Check if this is a class node (starts with /className[ or /className/)
+    const classNodePattern = `/${attrValue}`;
+    const classNodeIndex = currentXPath.indexOf(classNodePattern);
+    
+    if (classNodeIndex !== -1) {
+      // Check if it's followed by [ or / or end of string
+      const nextChar = currentXPath[classNodeIndex + classNodePattern.length];
+      if (!nextChar || nextChar === '[' || nextChar === '/') {
+        // Replace the class name with * and clean up any empty conditions
+        newXPath = (
+          currentXPath.substring(0, classNodeIndex) + 
+          '/*' + 
+          currentXPath.substring(classNodeIndex + classNodePattern.length)
+        ).replace(/\[\s*\]/g, ''); // Remove any empty condition blocks
+        isRemoving = true;
+      }
+    }
+  }
+  // Check if this exact attribute condition exists in the XPath
+  else if (currentXPath.includes(attrCondition)) {
+    // Remove the attribute condition
+    isRemoving = true;
+    
+    // Find all condition blocks in the XPath
+    const conditionBlocks = [];
+    let lastIndex = 0;
+    let match;
+    const conditionRegex = /(\[[^\[\]]*\])/g;
+    
+    // Split the XPath into segments around condition blocks
+    while ((match = conditionRegex.exec(currentXPath)) !== null) {
+      const conditionBlock = match[1];
+      const conditionStart = match.index;
+      const conditionEnd = conditionStart + conditionBlock.length;
+      
+      // Add the text before this condition
+      if (lastIndex < conditionStart) {
+        conditionBlocks.push({
+          type: 'text',
+          content: currentXPath.substring(lastIndex, conditionStart)
+        });
+      }
+      
+      // Process the condition block
+      if (conditionBlock.includes(attrCondition)) {
+        // This is the condition block containing our attribute
+        let newCondition = conditionBlock
+          .replace(` and ${attrCondition}`, '')  // Remove from middle
+          .replace(`${attrCondition} and `, '')   // Remove from start
+          .replace(attrCondition, '');            // Remove if it's the only condition
+          
+        // Clean up any remaining ' and ' at start/end
+        newCondition = newCondition.replace(/^\[\s*and\s+|\s+and\s*\]$/g, '[');
+        
+        // If the condition is now empty, remove the entire condition block
+        if (newCondition === '[]') {
+          newCondition = '';
+        }
+        
+        conditionBlocks.push({
+          type: 'condition',
+          content: newCondition
+        });
+      } else {
+        // Keep other condition blocks as-is
+        conditionBlocks.push({
+          type: 'condition',
+          content: conditionBlock
+        });
+      }
+      
+      lastIndex = conditionEnd;
     }
     
-    // Insert before the closing bracket
-    newXPath = currentXPath.replace(']', ` and @${attrName}='${escapedValue}']`);
+    // Add any remaining text after the last condition
+    if (lastIndex < currentXPath.length) {
+      conditionBlocks.push({
+        type: 'text',
+        content: currentXPath.substring(lastIndex)
+      });
+    }
+    
+    // Rebuild the XPath
+    newXPath = conditionBlocks.map(block => block.content).join('');
   } else {
-    // Add new condition
-    newXPath = `${currentXPath}[@${attrName}='${escapedValue}']`;
+    // Add the attribute condition
+    const hasExistingConditions = currentXPath.includes('[') && currentXPath.endsWith(']');
+    
+    if (hasExistingConditions) {
+      // Insert before the closing bracket
+      newXPath = currentXPath.replace(']', ` and ${attrCondition}]`);
+    } else {
+      // Add new condition
+      newXPath = `${currentXPath}[${attrCondition}]`;
+    }
   }
   
   // Update the XPath display
@@ -1177,7 +1259,7 @@ function enhanceXPath(attrName, attrValue) {
   document.getElementById('xpathTesterInput').value = newXPath;
   
   // Update the selector dropdown
-  updateXPathSelectorWithCustomXPath(currentElement, newXPath, `By ${attrName}`);
+  updateXPathSelectorWithCustomXPath(currentElement, newXPath, isRemoving ? 'Custom XPath' : `By ${attrName}`);
   
   // Select the new XPath in the dropdown
   const xpathSelector = document.getElementById('xpathSelector');
@@ -1188,8 +1270,26 @@ function enhanceXPath(attrName, attrValue) {
     }
   }
   
+  // Update the magnifying glass button state
+  if (buttonElement) {
+    const svg = buttonElement.querySelector('svg');
+    if (isRemoving) {
+      buttonElement.classList.remove('text-blue-600');
+      buttonElement.classList.add('text-gray-400');
+      buttonElement.title = 'Enhance XPath with this attribute';
+    } else {
+      buttonElement.classList.remove('text-gray-400');
+      buttonElement.classList.add('text-blue-600');
+      buttonElement.title = 'Remove this attribute from XPath';
+    }
+  }
+  
   // Show success message
-  showStatus(`Added @${attrName}='${attrValue}' to XPath`, 'success');
+  showStatus(isRemoving ? 
+    `Removed @${attrName}='${attrValue}' from XPath` : 
+    `Added @${attrName}='${attrValue}' to XPath`, 
+    'success'
+  );
   
   // Test the new XPath
   testXPath();
@@ -1360,12 +1460,26 @@ function updatePropertiesTable(element) {
     
     // Add magnifying glass button to enhance XPath with this attribute
     const magnifyBtn = document.createElement('button');
-    magnifyBtn.className = 'text-gray-400 hover:text-blue-600 p-1';
+    magnifyBtn.className = 'p-1';
     magnifyBtn.title = 'Enhance XPath with this attribute';
     magnifyBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>';
+    
+    // Check if this attribute is already in the current XPath
+    let currentXPath = document.getElementById('xpathDisplay').value.trim() || 
+                      document.getElementById('xpathTesterInput').value.trim();
+    const escapedValue = escapeXPathString(attrValue);
+    const attrPattern = new RegExp(`@${attrName}=['"]${escapedValue}['"]`);
+    
+    if (currentXPath && currentXPath.match(attrPattern)) {
+      magnifyBtn.classList.add('text-blue-600');
+      magnifyBtn.title = 'Remove this attribute from XPath';
+    } else {
+      magnifyBtn.classList.add('text-gray-400', 'hover:text-blue-600');
+    }
+    
     magnifyBtn.onclick = (e) => {
       e.stopPropagation();
-      enhanceXPath(attrName, attrValue);
+      enhanceXPath(attrName, attrValue, magnifyBtn);
     };
     
     // Add copy button
