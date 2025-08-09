@@ -347,7 +347,7 @@
                 <textarea id="xpathTesterInput" placeholder="Enter XPath to test" rows="3" class="w-full p-1.5 border rounded text-xs bg-gray-700 text-gray-100 border-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-y min-h-[2.8em]" style="font-size:13px;"></textarea>
               </div>
               <div class="flex gap-2 mt-2">
-                <button onclick="testXPath()" class="flex-1 p-1.5 bg-blue-600 rounded hover:bg-blue-700 text-white text-xs">
+                <button onclick="testXPath(false)" class="flex-1 p-1.5 bg-blue-600 rounded hover:bg-blue-700 text-white text-xs">
                   Test XPath
                 </button>
                 <button onclick="clearXPathTest()" class="flex-1 p-1.5 bg-gray-600 rounded hover:bg-gray-500 text-white text-xs">
@@ -997,19 +997,21 @@ function copySelectedXPath() {
 }
 
 // Test an XPath expression and highlight matching elements
-function testXPath() {
+function testXPath(suppressStatus) {
   // Clear previous test results but keep the input value
   const xpathInput = document.getElementById('xpathTesterInput');
   const xpath = xpathInput.value.trim();
-  
+  // If empty or only whitespace, clear highlights and optionally status
   if (!xpath) {
-    showStatus('Please enter an XPath expression to test', 'error');
+    clearXPathTest();
+    if (!suppressStatus) {
+      // Optionally show a message if not suppressed
+      // showStatus('Please enter an XPath expression to test', 'error');
+    }
     return;
   }
-  
   // Clear only the highlights, not the input
   clearXPathTest();
-  
   try {
     // Find all matching elements
     const result = document.evaluate(
@@ -1019,30 +1021,23 @@ function testXPath() {
       XPathResult.ORDERED_NODE_SNAPSHOT_TYPE,
       null
     );
-    
     const count = result.snapshotLength;
     const matchCountElement = document.getElementById('xpathMatchCount');
     matchCountElement.textContent = count;
-    
     if (count === 0) {
-      showStatus('No elements found matching the XPath', 'warning');
+      if (!suppressStatus) showStatus('No elements found matching the XPath', 'warning');
       return;
     }
-    
     // Store the XPath that was tested
     xpathInput.dataset.lastTestedXPath = xpath;
-    
     // Highlight all matching elements
     const overlay = document.getElementById('overlayContainer');
     const matches = [];
-    
     for (let i = 0; i < count; i++) {
       const element = result.snapshotItem(i);
       if (!element) continue;
-      
       const elementXPath = getXP(element);
       if (!elementXPath) continue;
-      
       const box = xpToOverlay.get(elementXPath);
       if (box) {
         // Store the match for later reference
@@ -1053,23 +1048,21 @@ function testXPath() {
         });
       }
     }
-    
     // Now highlight all valid matches
     matches.forEach((match, index) => {
       match.box.classList.add('xpath-match');
-      
       // Scroll the first match into view
       if (index === 0) {
         match.box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
     });
-    
-    const statusMessage = `Found ${matches.length} matching element${matches.length !== 1 ? 's' : ''}`;
-    showStatus(statusMessage, 'success');
-    
+    if (!suppressStatus) {
+      const statusMessage = `Found ${matches.length} matching element${matches.length !== 1 ? 's' : ''}`;
+      showStatus(statusMessage, 'success');
+    }
   } catch (e) {
     console.error('XPath error:', e);
-    showStatus(`XPath error: ${e.message}`, 'error');
+    if (!suppressStatus) showStatus(`XPath error: ${e.message}`, 'error');
     document.getElementById('xpathMatchCount').textContent = '0';
   }
 }
@@ -1334,13 +1327,9 @@ function enhanceXPath(attrName, attrValue, buttonElement) {
   // Update the XPath display
   const xpathDisplay = document.getElementById('xpathDisplay');
   xpathDisplay.value = newXPath;
-  
-  // Also update the tester input
-  document.getElementById('xpathTesterInput').value = newXPath;
-  
+  // Do NOT update the tester input or run testXPath here
   // Update the selector dropdown
   updateXPathSelectorWithCustomXPath(currentElement, newXPath, isRemoving ? 'Custom XPath' : `By ${attrName}`);
-  
   // Select the new XPath in the dropdown
   const xpathSelector = document.getElementById('xpathSelector');
   for (let i = 0; i < xpathSelector.options.length; i++) {
@@ -1349,7 +1338,6 @@ function enhanceXPath(attrName, attrValue, buttonElement) {
       break;
     }
   }
-  
   // Update the magnifying glass button state
   if (buttonElement) {
     const svg = buttonElement.querySelector('svg');
@@ -1363,14 +1351,12 @@ function enhanceXPath(attrName, attrValue, buttonElement) {
       buttonElement.title = 'Remove this attribute from XPath';
     }
   }
-  
   // Show success message
   showStatus(isRemoving ? 
     `Removed @${attrName}='${attrValue}' from XPath` : 
     `Added @${attrName}='${attrValue}' to XPath`, 
     'success'
   );
-  
   // Test the new XPath
   testXPath();
 }
@@ -1475,6 +1461,12 @@ function select(xp) {
   
   // Update properties table
   updatePropertiesTable(element);
+  // If tester input is not empty, re-run testXPath but suppress errors/messages
+  if (document.getElementById('xpathTesterInput').value.trim()) {
+    testXPath(true);
+  } else {
+    clearXPathTest();
+  }
 }
 
 function updatePropertiesTable(element) {
