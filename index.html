@@ -259,8 +259,8 @@
     <div class="flex gap-2">
       <label class="block"><input id="imgInput" type="file" accept="image/*" class="hidden" />
         <span class="inline-block text-center cursor-pointer bg-blue-600 text-white py-2 px-3 rounded hover:bg-blue-700">Select Screenshot (JPG/PNG)</span></label>
-      <label class="block"><input id="xmlInput" type="file" accept="text/xml,.xml" class="hidden" />
-        <span class="inline-block text-center cursor-pointer bg-blue-600 text-white py-2 px-3 rounded hover:bg-blue-700">Select UI XML</span></label>
+      <label class="block"><input id="xmlInput" type="file" accept="text/xml,.xml,.html,text/html" class="hidden" />
+        <span class="inline-block text-center cursor-pointer bg-blue-600 text-white py-2 px-3 rounded hover:bg-blue-700">Select UI XML/HTML</span></label>
     </div>
   </header>
 
@@ -429,7 +429,12 @@ function setStatus(el, state, ok='Loaded ✔', fileName='') {
 }
 
 /* ===== Drag & Drop ===== */
-function processFiles(files){Array.from(files).forEach(f=>{if(f.type.startsWith('image/')) loadImage(f); else if(f.name.endsWith('.xml')) loadXml(f);} );}
+function processFiles(files){
+  Array.from(files).forEach(f=>{
+    if(f.type.startsWith('image/')) loadImage(f);
+    else if(f.name.toLowerCase().endsWith('.xml') || f.name.toLowerCase().endsWith('.html')) loadXml(f);
+  });
+}
 // Make whole screen a drop target
 ['dragenter','dragover'].forEach(eType=>document.body.addEventListener(eType,e=>{e.preventDefault();document.body.classList.add('bg-gray-200');}));
 ['dragleave','drop'].forEach(eType=>document.body.addEventListener(eType,e=>{e.preventDefault();if(eType==='drop') processFiles(e.dataTransfer.files);document.body.classList.remove('bg-gray-200');}));
