@@ -7,12 +7,19 @@
   <!-- Tailwind for styling (demo) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    /* Screenshot always fully visible (fits height & width) */
-    #screenWrapper,
+    /* Viewer sizing: wrapper fills the viewer; image scales to fit within wrapper */
+    #screenWrapper {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
     #screenshot {
-      max-height: 100%;
-      max-width: 100%;
+      width: 100%;
+      height: 100%;
       object-fit: contain;
+      display: none; /* hidden until load */
+      user-select: none;
+      pointer-events: none; /* overlay boxes handle interaction */
     }
 
     /* Overlay boxes */
@@ -248,15 +255,16 @@
       color: #4b5563;
     }
 
-    /* Hide screenshot image until loaded to avoid broken icon */
-    #screenshot { display:none; }
+  /* Hide screenshot image until loaded to avoid broken icon (reinforced above) */
   </style>
 </head>
 <body class="flex flex-col h-screen font-sans">
   <!-- Header -->
   <header class="bg-gray-800 text-white p-4 flex items-center justify-between">
     <h1 class="text-lg font-semibold">Appium / Generic XML Bounds Viewer</h1>
-    <div class="flex gap-2">
+    <div class="flex gap-2 items-center">
+      <!-- X/Y coordinate display -->
+      <span id="xyIndicator" class="hidden px-3 py-1 rounded bg-gray-700 text-gray-200 text-xs font-mono select-none border border-gray-600">X: 0, Y: 0</span>
       <label class="block"><input id="imgInput" type="file" accept="image/*" class="hidden" />
         <span class="inline-block text-center cursor-pointer bg-blue-600 text-white py-2 px-3 rounded hover:bg-blue-700">Select Screenshot (JPG/PNG)</span></label>
       <label class="block"><input id="xmlInput" type="file" accept="text/xml,.xml,.html,text/html" class="hidden" />
@@ -364,7 +372,7 @@
     </aside>
 
     <!-- Viewer -->
-    <section id="viewer" class="relative flex-1 bg-black overflow-auto flex items-center justify-center">
+  <section id="viewer" class="relative flex-1 bg-black overflow-hidden">
       <!-- Placeholder shown before screenshot is loaded -->
       <div id="placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-center select-none">
         <!-- Simple phone-like SVG icon -->
@@ -375,9 +383,9 @@
         <p class="text-gray-500 text-sm">Load a screenshot and UI XML to begin.</p>
         <p class="text-gray-500 text-sm">Drag and drop of 2 files works as well.</p>
       </div>
-      <div id="screenWrapper" class="relative">
+      <div id="screenWrapper" class="relative w-full h-full">
         <img id="screenshot" alt="Screenshot" class="select-none" />
-        <div id="overlayContainer" class="absolute inset-0"></div>
+        <div id="overlayContainer" class="absolute"></div>
       </div>
     </section>
   </main>
@@ -398,6 +406,9 @@ const elemCount     = document.getElementById('elementCount');
 const propWrapper   = document.getElementById('propPanelWrapper');  // new reference
 const placeholder   = document.getElementById('placeholder');
 const tutorialWin   = document.getElementById('tutorialWindow');
+const xyIndicator   = document.getElementById('xyIndicator');
+let imgLoaded = false;
+
 function closeTutorial(){ if(tutorialWin){ tutorialWin.style.display='none'; localStorage.setItem('tutorialDismissed','1'); } }
 // Ensure maybeHideTutorial is defined
 function maybeHideTutorial() {
@@ -461,34 +472,90 @@ function loadImage(file){
   if(placeholder) placeholder.style.display='none';
   // Only hide placeholder after image is loaded
   maybeHideTutorial();
+  imgLoaded = false;
+  hideXYIndicator();
 }
 screenshotImg.onload=()=>{
-  screenshotImg.style.display='block';
-  if(placeholder) placeholder.style.display='none';
+  screenshotImg.style.display = 'block';
+  if (placeholder) placeholder.style.display = 'none';
   resizeOverlay();
   renderOverlays();
   maybeHideTutorial();
+  imgLoaded = true;
+  if (xyIndicator) xyIndicator.classList.remove('hidden');
 };
-window.addEventListener('resize',()=>{if(screenshotImg.src){resizeOverlay();renderOverlays();}});
-function resizeOverlay() {
-  // Get the wrapper and image natural size
-  const wrapper = document.getElementById('screenWrapper');
-  const naturalWidth = screenshotImg.naturalWidth;
-  const naturalHeight = screenshotImg.naturalHeight;
-  const wrapperWidth = wrapper.offsetWidth;
-  const wrapperHeight = wrapper.offsetHeight;
-  // Calculate scale to fit both width and height (object-fit: contain)
-  const scale = Math.min(wrapperWidth / naturalWidth, wrapperHeight / naturalHeight);
-  // Calculate displayed image size
-  const displayWidth = naturalWidth * scale;
-  const displayHeight = naturalHeight * scale;
-  // Set image size explicitly
-  screenshotImg.style.width = `${displayWidth}px`;
-  screenshotImg.style.height = `${displayHeight}px`;
-  // Set overlay size to match image
-  overlay.style.width = `${displayWidth}px`;
-  overlay.style.height = `${displayHeight}px`;
+
+// Hide indicator if no image
+function hideXYIndicator() {
+  imgLoaded = false;
+  if (xyIndicator) xyIndicator.classList.add('hidden');
 }
+
+// Utilities to compute displayed image rect (accounting for object-fit: contain letterboxing)
+const screenWrapper = document.getElementById('screenWrapper');
+function getDisplayedImageRect() {
+  const w = screenWrapper.clientWidth;
+  const h = screenWrapper.clientHeight;
+  const iw = screenshotImg.naturalWidth || 0;
+  const ih = screenshotImg.naturalHeight || 0;
+  if (!w || !h || !iw || !ih) return null;
+  const scale = Math.min(w / iw, h / ih);
+  const dispW = iw * scale;
+  const dispH = ih * scale;
+  const offsetLeft = (w - dispW) / 2;
+  const offsetTop = (h - dispH) / 2;
+  const wrapperRect = screenWrapper.getBoundingClientRect();
+  return {
+    left: wrapperRect.left + offsetLeft,
+    top: wrapperRect.top + offsetTop,
+    width: dispW,
+    height: dispH,
+    scale
+  };
+}
+
+function updateOverlayGeometry() {
+  const disp = getDisplayedImageRect();
+  if (!disp) return;
+  const wrapperRect = screenWrapper.getBoundingClientRect();
+  // Position overlay to exactly cover the displayed image area
+  overlay.style.left = (disp.left - wrapperRect.left) + 'px';
+  overlay.style.top = (disp.top - wrapperRect.top) + 'px';
+  overlay.style.width = disp.width + 'px';
+  overlay.style.height = disp.height + 'px';
+}
+
+function resizeOverlay() {
+  updateOverlayGeometry();
+}
+
+// Listen for mousemove on the image area (only when inside the displayed image rect)
+if (screenWrapper && xyIndicator) {
+  screenWrapper.addEventListener('mousemove', function(e) {
+    if (!imgLoaded || !screenshotImg.naturalWidth || !screenshotImg.naturalHeight) return;
+    const disp = getDisplayedImageRect();
+    if (!disp) return;
+    const inside = e.clientX >= disp.left && e.clientX <= (disp.left + disp.width) &&
+                   e.clientY >= disp.top && e.clientY <= (disp.top + disp.height);
+    if (!inside) {
+      xyIndicator.style.opacity = 0.5;
+      return;
+    }
+    const x = Math.round((e.clientX - disp.left) * (screenshotImg.naturalWidth / disp.width));
+    const y = Math.round((e.clientY - disp.top) * (screenshotImg.naturalHeight / disp.height));
+    xyIndicator.textContent = `X: ${x}, Y: ${y}`;
+    xyIndicator.style.opacity = 1;
+  });
+  screenWrapper.addEventListener('mouseleave', function() {
+    if (xyIndicator) xyIndicator.style.opacity = 0.5;
+  });
+}
+
+// Hide indicator when image is not loaded
+if (screenshotImg) {
+  screenshotImg.addEventListener('error', hideXYIndicator);
+}
+hideXYIndicator();
 
 /* ===== XML ===== */
 function loadXml(file){
@@ -588,14 +655,14 @@ function renderOverlays() {
   xpToOverlay.clear();
   xpToElem.clear();
   if (!xmlDoc || !screenshotImg.complete) return;
-  
-  // Get displayed image size and scale
-  const wrapper = document.getElementById('screenWrapper');
+
+  // Align overlay to displayed image and compute scale
+  updateOverlayGeometry();
   const naturalWidth = screenshotImg.naturalWidth;
   const naturalHeight = screenshotImg.naturalHeight;
-  const wrapperWidth = wrapper.clientWidth;
-  const wrapperHeight = wrapper.clientHeight;
-  const scale = Math.min(wrapperWidth / naturalWidth, wrapperHeight / naturalHeight);
+  const disp = getDisplayedImageRect();
+  if (!disp) return;
+  const scale = disp.scale;
   
   // Get all elements with bounds and calculate their areas and depths
   const nodes = [];
